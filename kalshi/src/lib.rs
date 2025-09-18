@@ -123,6 +123,7 @@ mod auth;
 mod exchange;
 mod kalshi_error;
 mod market;
+mod http;
 mod portfolio;
 #[cfg(feature = "websockets")]
 mod websockets;

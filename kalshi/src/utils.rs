@@ -53,8 +53,8 @@ pub(super) fn api_key_headers(
     let sig_raw = signer.sign_oneshot_to_vec(msg_string.as_bytes())?;
     // base64 encoded sig string
     let sig: String = BASE64_STANDARD.encode(sig_raw);
-    headers.push(("KALSHI-ACCESS-KEY", key_id.as_ref().to_string()));
-    headers.push(("KALSHI-ACCESS-SIGNATURE", sig));
-    headers.push(("KALSHI-ACCESS-TIMESTAMP", ts.to_string()));
+    headers.push(("kalshi-access-key", key_id.as_ref().to_string()));
+    headers.push(("kalshi-access-signature", sig));
+    headers.push(("kalshi-access-timestamp", ts.to_string()));
     Ok(headers)
 }

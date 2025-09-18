@@ -257,26 +257,16 @@ impl Kalshi {
         ticker: &String,
         depth: Option<i32>,
     ) -> Result<Orderbook, KalshiError> {
-        let orderbook_url: &str =
-            &format!("{}/markets/{}/orderbook", self.base_url.to_string(), ticker);
+        let path = &format!("/markets/{}/orderbook", ticker);
 
         let mut params: Vec<(&str, String)> = Vec::new();
-
         add_param!(params, "depth", depth);
 
-        let orderbook_url =
-            reqwest::Url::parse_with_params(orderbook_url, &params).unwrap_or_else(|err| {
-                eprintln!("{:?}", err);
-                panic!("Internal Parse Error, please contact developer!");
-            });
+        let orderbook_url = self.build_url_with_params(path, params)
+            .map_err(|e| e)?;
 
         let result: OrderBookResponse = self
-            .client
-            .get(orderbook_url)
-            .header("Authorization", self.curr_token.clone().unwrap())
-            .send()
-            .await?
-            .json()
+            .http_get(orderbook_url)
             .await?;
 
         return Ok(result.orderbook);

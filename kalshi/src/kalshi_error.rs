@@ -1,5 +1,8 @@
-use core::fmt;
-use std::error::Error;
+use std::{
+    error::Error,
+    fmt::{self, Display},
+};
+
 // CUSTOM ERROR STRUCTS + ENUMS
 // -----------------------------------------------
 
@@ -9,6 +12,7 @@ use std::error::Error;
 /// user input errors, and internal errors. It provides a unified error type for
 /// the entire Kalshi module.
 ///
+/// Represents various errors that can occur when interacting with the Kalshi API.
 #[derive(Debug)]
 pub enum KalshiError {
     /// Errors that occur during HTTP requests. This includes connectivity issues,
@@ -21,7 +25,7 @@ pub enum KalshiError {
     // TODO: add error type specifically for joining threads together.
 }
 
-impl fmt::Display for KalshiError {
+impl Display for KalshiError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             KalshiError::RequestError(e) => write!(f, "HTTP Error: {}", e),
@@ -52,9 +56,7 @@ impl From<reqwest::Error> for KalshiError {
                 } else if status.is_server_error() {
                     KalshiError::RequestError(RequestError::ServerError(err))
                 } else {
-                    KalshiError::InternalError(
-                        "Theoretically Impossible Error. Internal code 1".to_string(),
-                    )
+                    KalshiError::RequestError(RequestError::ServerError(err))
                 }
             } else {
                 KalshiError::RequestError(RequestError::ServerError(err))
@@ -62,18 +64,12 @@ impl From<reqwest::Error> for KalshiError {
         } else if err.is_body() || err.is_timeout() {
             KalshiError::RequestError(RequestError::ServerError(err))
         } else {
-            KalshiError::InternalError(
-                "Theoretically Impossible Error. Internal code 2".to_string(),
-            )
+            KalshiError::RequestError(RequestError::ServerError(err))
         }
     }
 }
 
-/// Specific kinds of HTTP request errors encountered in the Kalshi module.
-///
-/// This enum categorizes errors related to HTTP requests, including serialization errors, client-side errors,
-/// and server-side errors.
-///
+/// Represents errors specific to HTTP requests within the Kalshi API client.
 #[derive(Debug)]
 pub enum RequestError {
     /// Errors occurring during serialization or deserialization of request or response data.
@@ -82,6 +78,8 @@ pub enum RequestError {
     ClientError(reqwest::Error),
     /// Errors indicating server-side issues, like internal server errors or service unavailability.
     ServerError(reqwest::Error),
+    /// Errors occurring during URL parsing.
+    UrlParseError(url::ParseError),
 }
 
 impl fmt::Display for RequestError {
@@ -97,11 +95,12 @@ impl fmt::Display for RequestError {
             },
             RequestError::ServerError(e) => {
                 if let Some(status) = e.status() {
-                    write!(f, "Server Request Error: Status code: {}", status)
+                    write!(f, "Server Request Error, Status code: {}", status)
                 } else {
                     write!(f, "Server Request Error: {}", e)
                 }
             },
+            RequestError::UrlParseError(e) => write!(f, "URL Parse Error: {}", e),
         }
     }
 }
@@ -112,6 +111,7 @@ impl Error for RequestError {
             RequestError::ClientError(e) => Some(e),
             RequestError::ServerError(e) => Some(e),
             RequestError::SerializationError(e) => Some(e),
+            RequestError::UrlParseError(e) => Some(e),
         }
     }
 }
