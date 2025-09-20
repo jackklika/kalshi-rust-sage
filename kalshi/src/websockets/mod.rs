@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-mod commands;
+pub mod commands;
 
 pub mod client;
 
