@@ -78,141 +78,141 @@ pub struct KalshiSubscribeMessage {
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct KalshiOrderbookErrorMessage {
-    code: u32,
-    msg: String,
-    market_id: Option<String>,
-    market_ticker: Option<String>,
+    pub code: u32,
+    pub msg: String,
+    pub market_id: Option<String>,
+    pub market_ticker: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct KalshiOrderbookSnapshotMessage {
-    market_ticker: String,
-    yes: Option<Vec<(u32, i32)>>,
-    no: Option<Vec<(u32, i32)>>,
+    pub market_ticker: String,
+    pub yes: Option<Vec<(u32, i32)>>,
+    pub no: Option<Vec<(u32, i32)>>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct KalshiOrderbookDeltaMessage {
-    market_ticker: String,
-    price: u32,
-    delta: i32,
-    side: KalshiSide,
-    client_order_id: Option<String>,
+    pub market_ticker: String,
+    pub price: u32,
+    pub delta: i32,
+    pub side: KalshiSide,
+    pub client_order_id: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct KalshiTickerMessage {
-    market_ticker: String,
-    price: u32,
-    yes_bid: u32,
-    yes_ask: u32,
-    volume: u32,
-    open_interest: u32,
-    dollar_volume: u32,
-    dollar_open_interest: u32,
-    ts: u64,
+    pub market_ticker: String,
+    pub price: u32,
+    pub yes_bid: u32,
+    pub yes_ask: u32,
+    pub volume: u32,
+    pub open_interest: u32,
+    pub dollar_volume: u32,
+    pub dollar_open_interest: u32,
+    pub ts: u64,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct KalshiTradeMessage {
-    market_ticker: String,
-    yes_price: u32,
-    no_price: u32,
-    count: u32,
-    taker_side: KalshiSide,
-    ts: u64,
+    pub market_ticker: String,
+    pub yes_price: u32,
+    pub no_price: u32,
+    pub count: u32,
+    pub taker_side: KalshiSide,
+    pub ts: u64,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct KalshiFillMessage {
-    trade_id: String,
-    order_id: String,
-    market_ticker: String,
-    is_taker: bool,
-    side: KalshiSide,
-    yes_price: u32,
-    no_price: u32,
-    count: u32,
-    action: KalshiAction,
-    ts: u64,
-    client_order_id: Option<String>,
-    post_position: Option<i32>,
+    pub trade_id: String,
+    pub order_id: String,
+    pub market_ticker: String,
+    pub is_taker: bool,
+    pub side: KalshiSide,
+    pub yes_price: u32,
+    pub no_price: u32,
+    pub count: u32,
+    pub action: KalshiAction,
+    pub ts: u64,
+    pub client_order_id: Option<String>,
+    pub post_position: Option<i32>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct KalshiMarketLifecycleMessage {
-    market_ticker: String,
-    close_ts: u32,
-    determination_ts: Option<u32>,
-    settled_ts: Option<u32>,
-    result: Option<String>,
-    is_deactivated: bool,
+    pub market_ticker: String,
+    pub close_ts: u32,
+    pub determination_ts: Option<u32>,
+    pub settled_ts: Option<u32>,
+    pub result: Option<String>,
+    pub is_deactivated: bool,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct KalshiMarketLifecycleV2Message {
-    event_type: String,
-    market_ticker: String,
-    open_ts: Option<u64>,
-    close_ts: Option<u64>,
-    result: Option<String>,
-    determination_ts: Option<u64>,
-    settled_ts: Option<u64>,
-    is_deactivated: Option<bool>,
-    additional_metadata: Option<KalshiMarketAdditionalMetadata>,
+    pub event_type: String,
+    pub market_ticker: String,
+    pub open_ts: Option<u64>,
+    pub close_ts: Option<u64>,
+    pub result: Option<String>,
+    pub determination_ts: Option<u64>,
+    pub settled_ts: Option<u64>,
+    pub is_deactivated: Option<bool>,
+    pub additional_metadata: Option<KalshiMarketAdditionalMetadata>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct KalshiMarketAdditionalMetadata {
-    name: Option<String>,
-    title: Option<String>,
-    yes_sub_title: Option<String>,
-    no_sub_title: Option<String>,
-    rules_primary: Option<String>,
-    rules_secondary: Option<String>,
-    can_close_early: Option<bool>,
-    expected_expiration_ts: Option<u64>,
-    strike_type: Option<String>,
-    floor_strike: Option<String>,
-    cap_strike: Option<bool>,
-    custom_strike: Option<serde_json::Value>,
+    pub name: Option<String>,
+    pub title: Option<String>,
+    pub yes_sub_title: Option<String>,
+    pub no_sub_title: Option<String>,
+    pub rules_primary: Option<String>,
+    pub rules_secondary: Option<String>,
+    pub can_close_early: Option<bool>,
+    pub expected_expiration_ts: Option<u64>,
+    pub strike_type: Option<String>,
+    pub floor_strike: Option<String>,
+    pub cap_strike: Option<bool>,
+    pub custom_strike: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct KalshiEventLifecycleMessage {
-    event_ticker: String,
-    title: String,
-    sub_title: String,
-    collateral_return_type: String,
-    series_ticker: String,
-    strike_date: Option<u64>,
-    strike_period: Option<String>,
+    pub event_ticker: String,
+    pub title: String,
+    pub sub_title: String,
+    pub collateral_return_type: String,
+    pub series_ticker: String,
+    pub strike_date: Option<u64>,
+    pub strike_period: Option<String>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct KalshiSelectedMarket {
-    event_ticker: String,
-    market_ticker: String,
-    side: KalshiSide,
+    pub event_ticker: String,
+    pub market_ticker: String,
+    pub side: KalshiSide,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct KalshiMultivariateLookupMessage {
-    collection_ticker: String,
-    event_ticker: String,
-    market_ticker: String,
-    selected_markets: Vec<KalshiSelectedMarket>,
+    pub collection_ticker: String,
+    pub event_ticker: String,
+    pub market_ticker: String,
+    pub selected_markets: Vec<KalshiSelectedMarket>,
 }
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct KalshiMarketPositionMessage {
-    user_id: String,
-    market_ticker: String,
-    position: i32,
-    position_cost: i64,
-    realized_pnl: i64,
-    fees_paid: i64,
-    volume: i32,
+    pub user_id: String,
+    pub market_ticker: String,
+    pub position: i32,
+    pub position_cost: i64,
+    pub realized_pnl: i64,
+    pub fees_paid: i64,
+    pub volume: i32,
 }
 
 #[derive(Debug, Deserialize, Clone)]
