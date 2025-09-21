@@ -7,7 +7,7 @@ pub mod client;
 #[allow(dead_code)]
 pub mod responses;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Hash, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum KalshiChannel {
     OrderbookDelta,
@@ -15,6 +15,9 @@ pub enum KalshiChannel {
     Trade,
     Fill,
     MarketLifecycle,
+    MarketLifecycleV2,
+    MarketPositions,
+    Multivariate,
 }
 
 impl KalshiChannel {
@@ -25,6 +28,9 @@ impl KalshiChannel {
             KalshiChannel::Trade => "trade",
             KalshiChannel::Fill => "fill",
             KalshiChannel::MarketLifecycle => "market_lifecycle",
+            KalshiChannel::MarketLifecycleV2 => "market_lifecycle_v2",
+            KalshiChannel::MarketPositions => "market_positions",
+            KalshiChannel::Multivariate => "multivariate",
         }
     }
 }

@@ -24,6 +24,7 @@ pub enum KalshiCommand {
 #[derive(Serialize, Clone, Debug)]
 pub struct KalshiSubscribeCommandParams {
     pub channels: Vec<KalshiChannel>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub market_tickers: Vec<String>,
 }
 
@@ -35,6 +36,7 @@ pub struct KalshiUnsubscribeCommandParams {
 #[derive(Serialize, Clone, Debug)]
 pub struct KalshiUpdateSubscriptionCommandParams {
     pub action: KalshiUpdateSubscriptionAction,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub market_tickers: Vec<String>,
     pub sids: [u32; 1],
 }
