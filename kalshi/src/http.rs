@@ -3,9 +3,10 @@ use crate::kalshi_error::RequestError;
 use crate::utils::api_key_headers;
 use reqwest::Method;
 use crate::kalshi_error::KalshiError;
+use openssl::rsa::{Padding};
 use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
 use openssl::pkey::PKey;
-use openssl::sign::Signer;
+use openssl::sign::{RsaPssSaltlen, Signer};
 use openssl::hash::MessageDigest;
 use reqwest::Url;
 use serde::de::DeserializeOwned;
@@ -21,6 +22,9 @@ impl Kalshi {
             KalshiAuth::ApiKey { key_id, key, ..} => {
                 let pkey = PKey::private_key_from_pem(key.as_bytes()).unwrap();
                 let mut signer = Signer::new(MessageDigest::sha256(), &pkey).unwrap();
+                signer.set_rsa_padding(Padding::PKCS1_PSS).unwrap();
+                signer.set_rsa_mgf1_md(MessageDigest::sha256()).unwrap();
+                signer.set_rsa_pss_saltlen(RsaPssSaltlen::DIGEST_LENGTH).unwrap();
                 let api_headers = api_key_headers(key_id, &mut signer, path, method).unwrap();
                 for (key_str, value_string) in api_headers {
                     headers.insert(HeaderName::from_static(key_str), HeaderValue::from_str(&value_string).unwrap());
@@ -44,16 +48,41 @@ impl Kalshi {
             .await
             .map_err(|e| KalshiError::RequestError(RequestError::SerializationError(e))) // Map reqwest::Error to KalshiError
     }
-    pub async fn http_post<B, T>(&self, url: Url, body: &B) -> Result<T, KalshiError> where B: Serialize + ?Sized, T: DeserializeOwned {
-        self
+    pub async fn http_post<B, T>(&self, url: Url, body: &B) -> Result<T, KalshiError>
+    where
+        B: Serialize + ?Sized,
+        T: DeserializeOwned,
+    {
+        let resp = self
             .client
             .post(url.clone())
-            .headers(self.auth_headers(url.path(), Method::POST)).json(body)
+            .headers(self.auth_headers(url.path(), Method::POST))
+            .json(body)
             .send()
-            .await?
-            .json::<T>() // Deserialize directly to T
-            .await
-            .map_err(|e| KalshiError::RequestError(RequestError::SerializationError(e))) // Map reqwest::Error to KalshiError
+            .await?;
+
+        let status = resp.status();
+        let bytes = resp.bytes().await?;
+
+        // Debug logging; replace with tracing::debug! if using tracing
+        println!("POST {} -> {}", url, status);
+        println!("Response body: {}", String::from_utf8_lossy(&bytes));
+
+        if !status.is_success() {
+            return Err(KalshiError::InternalError(format!(
+                "Non-success status {}. Body: {}",
+                status,
+                String::from_utf8_lossy(&bytes)
+            )));
+        }
+
+        serde_json::from_slice::<T>(&bytes).map_err(|e| {
+            KalshiError::InternalError(format!(
+                "Deserialize error: {}. Body: {}",
+                e,
+                String::from_utf8_lossy(&bytes)
+            ))
+        })
     }
 
     /// Helper function to build a URL with query parameters.
