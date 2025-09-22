@@ -570,15 +570,9 @@ impl Kalshi {
         no_price: Option<i64>,
         sell_position_floor: Option<i32>,
         yes_price: Option<i64>,
+        time_in_force: Option<TimeInForce>,
     ) -> Result<Order, KalshiError> {
-        if self.curr_token == None {
-            return Err(KalshiError::UserInputError(
-                "Not logged in, a valid token is required for requests that require authentication"
-                    .to_string(),
-            ));
-        }
-        let order_url: &str = &format!("{}/portfolio/orders", self.base_url.to_string());
-
+        let order_url = self.build_url("/portfolio/orders")?;
         match input_type {
             OrderType::Limit => match (no_price, yes_price) {
                 (Some(_), Some(_)) => {
@@ -615,44 +609,19 @@ impl Kalshi {
             no_price: no_price,
             sell_position_floor: sell_position_floor,
             yes_price: yes_price,
+            no_price_dollars: None,
+            yes_price_dollars: None,
+            order_group_id: None,
+            post_only: None,
+            sell_position_capped: None,
+            self_trade_prevention_type: None,
+            time_in_force: time_in_force,
         };
 
-        let response = self
-            .client
-            .post(order_url)
-            .header("Authorization", self.curr_token.clone().unwrap())
-            .header("content-type", "application/json".to_string())
-            .json(&order_payload)
-            .send()
-            .await;
-
-        match response {
-            Ok(resp) => {
-                if resp.status().is_success() {
-                    match resp.json::<SingleOrderResponse>().await {
-                        Ok(order_response) => Ok(order_response.order),
-                        Err(json_err) => {
-                            // Handle JSON decoding error
-                            let error_message =
-                                format!("Failed to decode JSON response: {}", json_err);
-                            eprintln!("{}", error_message);
-                            Err(KalshiError::InternalError(error_message))
-                        }
-                    }
-                } else {
-                    // Handle non-success HTTP status codes
-                    let error_message = format!("HTTP Error: {}", resp.status());
-                    eprintln!("{}", error_message);
-                    Err(KalshiError::InternalError(error_message))
-                }
-            }
-            Err(request_err) => {
-                // Handle errors in sending the request
-                let error_message = format!("Failed to send request: {}", request_err);
-                eprintln!("{}", error_message);
-                Err(KalshiError::InternalError(error_message))
-            }
-        }
+        let order_resp: SingleOrderResponse = self
+            .http_post(order_url, &order_payload)
+            .await?;
+        return Ok(order_resp.order);
     }
 
     pub async fn batch_cancel_order(
@@ -769,12 +738,24 @@ struct CreateOrderPayload {
     count: i32,
     side: Side,
     ticker: String,
+    // Keep 'type' to align with existing API usage in this codebase
     r#type: OrderType,
+    // Optional fields per API docs
     buy_max_cost: Option<i64>,
     expiration_ts: Option<i64>,
     no_price: Option<i64>,
     sell_position_floor: Option<i32>,
     yes_price: Option<i64>,
+    // Dollar price variants (fixed-point strings like "0.2300")
+    no_price_dollars: Option<String>,
+    yes_price_dollars: Option<String>,
+    // Order grouping and flags
+    order_group_id: Option<String>,
+    post_only: Option<bool>,
+    sell_position_capped: Option<bool>,
+    self_trade_prevention_type: Option<String>,
+    // Time-in-force policy
+    time_in_force: Option<TimeInForce>,
 }
 
 // PUBLIC STRUCTS
@@ -958,10 +939,10 @@ pub struct OrderCreationField {
     pub expiration_ts: Option<i64>,
     /// Price of the 'No' option in the order. Optional.
     pub no_price: Option<i64>,
-    /// The minimum position the seller is willing to hold after selling. Optional.
-    pub sell_position_floor: Option<i32>,
     /// Price of the 'Yes' option in the order. Optional.
     pub yes_price: Option<i64>,
+    /// Time-in-force policy for the order. Optional.
+    pub time_in_force: Option<TimeInForce>,
 }
 
 impl OrderParams for OrderCreationField {
@@ -977,8 +958,8 @@ impl OrderParams for OrderCreationField {
         Option<i64>,
         Option<i64>,
         Option<i64>,
-        Option<i32>,
         Option<i64>,
+        Option<TimeInForce>,
     ) {
         (
             self.action,
@@ -990,8 +971,8 @@ impl OrderParams for OrderCreationField {
             self.buy_max_cost,
             self.expiration_ts,
             self.no_price,
-            self.sell_position_floor,
             self.yes_price,
+            self.time_in_force,
         )
     }
 }
@@ -1070,6 +1051,18 @@ pub enum OrderType {
     Limit,
 }
 
+/// Defines the time-in-force policy for an order in the Kalshi exchange.
+///
+/// This enum specifies how long an order remains active before it is executed or expires.
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TimeInForce {
+    /// An order that must be executed immediately and completely or it is canceled.
+    FillOrKill,
+    /// An order that must be executed immediately, and any portion not filled is canceled.
+    ImmediateOrCancel,
+}
+
 trait OrderParams {
     fn get_params(
         self,
@@ -1083,8 +1076,8 @@ trait OrderParams {
         Option<i64>,
         Option<i64>,
         Option<i64>,
-        Option<i32>,
         Option<i64>,
+        Option<TimeInForce>,
     );
 }
 
@@ -1099,8 +1092,8 @@ impl OrderParams
         Option<i64>,
         Option<i64>,
         Option<i64>,
-        Option<i32>,
         Option<i64>,
+        Option<TimeInForce>,
     )
 {
     fn get_params(
@@ -1115,8 +1108,8 @@ impl OrderParams
         Option<i64>,
         Option<i64>,
         Option<i64>,
-        Option<i32>,
         Option<i64>,
+        Option<TimeInForce>,
     ) {
         (
             self.0, self.1, self.2, self.3, self.4, self.5, self.6, self.7, self.8, self.9, self.10,
