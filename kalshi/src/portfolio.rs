@@ -88,13 +88,6 @@ impl Kalshi {
         limit: Option<i32>,
         cursor: Option<String>,
     ) -> Result<(Option<String>, Vec<Order>), KalshiError> {
-        if self.curr_token == None {
-            return Err(KalshiError::UserInputError(
-                "Not logged in, a valid token is required for requests that require authentication"
-                    .to_string(),
-            ));
-        }
-        let user_orders_url: &str = &format!("{}/portfolio/orders", self.base_url.to_string());
 
         let mut params: Vec<(&str, String)> = Vec::with_capacity(7);
 
@@ -106,20 +99,13 @@ impl Kalshi {
         add_param!(params, "event_ticker", event_ticker);
         add_param!(params, "status", status);
 
-        let user_orders_url = reqwest::Url::parse_with_params(user_orders_url, &params)
-            .unwrap_or_else(|err| {
-                eprintln!("{:?}", err);
-                panic!("Internal Parse Error, please contact developer!");
-            });
+        let user_orders_url = self.build_url_with_params("/portfolio/orders", params).unwrap();
 
         let result: MultipleOrderResponse = self
-            .client
-            .get(user_orders_url)
-            .header("Authorization", self.curr_token.clone().unwrap())
-            .send()
-            .await?
-            .json()
+            .http_get(user_orders_url)
             .await?;
+
+        println!("Received orders: {:?}", result.orders);
 
         return Ok((result.cursor, result.orders));
     }
