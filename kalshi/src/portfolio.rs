@@ -430,6 +430,7 @@ impl Kalshi {
     ///
     /// * `limit` - An optional integer to limit the number of positions returned.
     /// * `cursor` - An optional string for pagination cursor.
+    /// * `count_filter` - An optional comma-separated list of fields to require non-zero: position,total_traded,resting_order_count.
     /// * `settlement_status` - An optional string to filter positions by their settlement status.
     /// * `ticker` - An optional string to filter positions by market ticker.
     /// * `event_ticker` - An optional string to filter positions by event ticker.
@@ -444,46 +445,33 @@ impl Kalshi {
     ///
     /// ```
     /// // Assuming `kalshi_instance` is an already authenticated instance of `Kalshi`
-    /// let user_positions = kalshi_instance.get_user_positions(None, None, None, None, None).await.unwrap();
+    /// let user_positions = kalshi_instance.get_user_positions(None, None, Some("position,total_traded,resting_order_count".to_string()), None, None, None).await.unwrap();
     /// ```
     ///
     pub async fn get_user_positions(
         &self,
         limit: Option<i64>,
         cursor: Option<String>,
+        count_filter: Option<String>,
         settlement_status: Option<String>,
         ticker: Option<String>,
         event_ticker: Option<String>,
     ) -> Result<(Option<String>, Vec<EventPosition>, Vec<MarketPosition>), KalshiError> {
-        if self.curr_token == None {
-            return Err(KalshiError::UserInputError(
-                "Not logged in, a valid token is required for requests that require authentication"
-                    .to_string(),
-            ));
-        }
-        let positions_url: &str = &format!("{}/portfolio/positions", self.base_url.to_string());
+        let positions_url: &str = "/portfolio/positions";
 
-        let mut params: Vec<(&str, String)> = Vec::with_capacity(6);
+        let mut params: Vec<(&str, String)> = Vec::with_capacity(7);
 
         add_param!(params, "limit", limit);
         add_param!(params, "cursor", cursor);
+        add_param!(params, "count_filter", count_filter);
         add_param!(params, "settlement_status", settlement_status);
         add_param!(params, "ticker", ticker);
         add_param!(params, "event_ticker", event_ticker);
 
-        let positions_url =
-            reqwest::Url::parse_with_params(positions_url, &params).unwrap_or_else(|err| {
-                eprintln!("{:?}", err);
-                panic!("Internal Parse Error, please contact developer!");
-            });
+        let positions_url_with_params = self.build_url_with_params(positions_url, params).unwrap();
 
         let result: GetPositionsResponse = self
-            .client
-            .get(positions_url)
-            .header("Authorization", self.curr_token.clone().unwrap())
-            .send()
-            .await?
-            .json()
+            .http_get(positions_url_with_params)
             .await?;
 
         Ok((

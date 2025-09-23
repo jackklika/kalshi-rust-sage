@@ -38,15 +38,35 @@ impl Kalshi {
     }
 
     pub async fn http_get<T: DeserializeOwned>(&self, url: Url) -> Result<T, KalshiError> {
-        self
+        let resp = self
             .client
             .get(url.clone())
             .headers(self.auth_headers(url.path(), Method::GET))
             .send()
-            .await?
-            .json::<T>() // Deserialize directly to T
-            .await
-            .map_err(|e| KalshiError::RequestError(RequestError::SerializationError(e))) // Map reqwest::Error to KalshiError
+            .await?;
+
+        let status = resp.status();
+        let bytes = resp.bytes().await?;
+
+        // Debug logging; replace with tracing::debug! if using tracing
+        println!("GET {} -> {}", url, status);
+        println!("Response body: {}", String::from_utf8_lossy(&bytes));
+
+        if !status.is_success() {
+            return Err(KalshiError::InternalError(format!(
+                "Non-success status {}. Body: {}",
+                status,
+                String::from_utf8_lossy(&bytes)
+            )));
+        }
+
+        serde_json::from_slice::<T>(&bytes).map_err(|e| {
+            KalshiError::InternalError(format!(
+                "Deserialize error: {}. Body: {}",
+                e,
+                String::from_utf8_lossy(&bytes)
+            ))
+        })
     }
     pub async fn http_post<B, T>(&self, url: Url, body: &B) -> Result<T, KalshiError>
     where
