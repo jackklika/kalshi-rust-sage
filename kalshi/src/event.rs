@@ -18,7 +18,7 @@ impl Kalshi {
     /// /dev/null/example.rs#L1-12
     /// # async fn example(k: &kalshi::Kalshi) -> Result<(), kalshi::KalshiError> {
     /// let meta = k.get_event_metadata(&"EVENT-123".to_string()).await?;
-    /// println!("Event image: {:?}", meta.image_url);
+    /// tracing::debug!("Event image: {:?}", meta.image_url);
     /// # Ok(())
     /// # }
     /// ```
@@ -29,11 +29,7 @@ impl Kalshi {
         let path = format!("/events/{}/metadata", event_ticker);
         let url = self.build_url_with_params(&path, Vec::new())?;
         let result: EventMetadata = self
-            .client
-            .get(url)
-            .send()
-            .await?
-            .json()
+            .http_get(url)
             .await?;
         Ok(result)
     }
@@ -52,7 +48,7 @@ impl Kalshi {
     /// /dev/null/example.rs#L1-12
     /// # async fn example(k: &kalshi::Kalshi) -> Result<(), kalshi::KalshiError> {
     /// let candles = k.get_event_candlesticks(&"EVENT-123".to_string()).await?;
-    /// println!("Markets in event: {}", candles.market_tickers.len());
+    /// tracing::debug!("Markets in event: {}", candles.market_tickers.len());
     /// # Ok(())
     /// # }
     /// ```
@@ -63,11 +59,7 @@ impl Kalshi {
         let path = format!("/events/{}/candlesticks", event_ticker);
         let url = self.build_url_with_params(&path, Vec::new())?;
         let result: EventCandlesticks = self
-            .client
-            .get(url)
-            .send()
-            .await?
-            .json()
+            .http_get(url)
             .await?;
         Ok(result)
     }
@@ -89,7 +81,7 @@ impl Kalshi {
     /// # async fn example(k: &kalshi::Kalshi) -> Result<(), kalshi::KalshiError> {
     /// let history = k.get_event_forecast_history(&"EVENT-123".to_string()).await?;
     /// if let Some(first) = history.first() {
-    ///   println!("Interval: {} minutes, pts: {}", first.period_interval, first.percentile_points.len());
+    ///   tracing::debug!("Interval: {} minutes, pts: {}", first.period_interval, first.percentile_points.len());
     /// }
     /// # Ok(())
     /// # }
@@ -101,11 +93,7 @@ impl Kalshi {
         let path = format!("/cached/events/{}/forecast_history", event_ticker);
         let url = self.build_url_with_params(&path, Vec::new())?;
         let result: ForecastHistoryResponse = self
-            .client
-            .get(url)
-            .send()
-            .await?
-            .json()
+            .http_get(url)
             .await?;
         Ok(result.forecast_history)
     }
@@ -126,11 +114,7 @@ impl Kalshi {
 
         let url = self.build_url_with_params(&path, params)?;
         let result: EventWithMarketsResponse = self
-            .client
-            .get(url)
-            .send()
-            .await?
-            .json()
+            .http_get(url)
             .await?;
         Ok(result.markets)
     }

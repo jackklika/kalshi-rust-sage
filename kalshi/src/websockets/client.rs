@@ -97,8 +97,8 @@ impl<'a> KalshiWebsocketClient {
             tokio_tungstenite::tungstenite::Error::Http(res) => {
                 if let Some(body) = res.body() {
                     if let Ok(error_body) = String::from_utf8(body.to_vec()) {
-                        eprintln!("Request was {:?}", req_clone);
-                        eprintln!("Kalshi error response was {}", error_body);
+                        tracing::error!("Request was {:?}", req_clone);
+                        tracing::error!("Kalshi error response was {}", error_body);
                     }
                 }
             }

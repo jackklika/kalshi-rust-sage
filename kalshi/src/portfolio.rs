@@ -26,24 +26,10 @@ impl Kalshi {
     /// ```
     ///
     pub async fn get_balance(&self) -> Result<i64, KalshiError> {
-        if self.curr_token == None {
-            return Err(KalshiError::UserInputError(
-                "Not logged in, a valid token is required for requests that require authentication"
-                    .to_string(),
-            ));
-        }
-
-        let balance_url: &str = &format!("{}/portfolio/balance", self.base_url.to_string());
-
+        let balance_url = self.build_url("/portfolio/balance")?;
         let result: BalanceResponse = self
-            .client
-            .get(balance_url)
-            .header("Authorization", self.curr_token.clone().unwrap())
-            .send()
-            .await?
-            .json()
+            .http_get(balance_url)
             .await?;
-
         Ok(result.balance)
     }
 
@@ -105,7 +91,7 @@ impl Kalshi {
             .http_get(user_orders_url)
             .await?;
 
-        println!("Received orders: {:?}", result.orders);
+        tracing::debug!("Received orders: {:?}", result.orders);
 
         return Ok((result.cursor, result.orders));
     }
@@ -133,25 +119,10 @@ impl Kalshi {
     /// ```
     ///
     pub async fn get_single_order(&self, order_id: &String) -> Result<Order, KalshiError> {
-        if self.curr_token == None {
-            return Err(KalshiError::UserInputError(
-                "Not logged in, a valid token is required for requests that require authentication"
-                    .to_string(),
-            ));
-        }
-        let user_order_url: &str = &format!(
-            "{}/portfolio/orders/{}",
-            self.base_url.to_string(),
-            order_id
-        );
+        let user_order_url = self.build_url(&format!("/portfolio/orders/{}", order_id))?;
 
         let result: SingleOrderResponse = self
-            .client
-            .get(user_order_url)
-            .header("Authorization", self.curr_token.clone().unwrap())
-            .send()
-            .await?
-            .json()
+            .http_get(user_order_url)
             .await?;
 
         return Ok(result.order);
@@ -182,25 +153,10 @@ impl Kalshi {
     /// ```
     ///
     pub async fn cancel_order(&self, order_id: &str) -> Result<(Order, i32), KalshiError> {
-        if self.curr_token == None {
-            return Err(KalshiError::UserInputError(
-                "Not logged in, a valid token is required for requests that require authentication"
-                    .to_string(),
-            ));
-        }
-        let cancel_order_url: &str = &format!(
-            "{}/portfolio/orders/{}",
-            self.base_url.to_string(),
-            order_id
-        );
+        let cancel_order_url = self.build_url(&format!("/portfolio/orders/{}", order_id))?;
 
         let result: DeleteOrderResponse = self
-            .client
-            .delete(cancel_order_url)
-            .header("Authorization", self.curr_token.clone().unwrap())
-            .send()
-            .await?
-            .json()
+            .http_delete(cancel_order_url)
             .await?;
 
         Ok((result.order, result.reduced_by))
@@ -238,17 +194,7 @@ impl Kalshi {
         reduce_by: Option<i32>,
         reduce_to: Option<i32>,
     ) -> Result<Order, KalshiError> {
-        if self.curr_token == None {
-            return Err(KalshiError::UserInputError(
-                "Not logged in, a valid token is required for requests that require authentication"
-                    .to_string(),
-            ));
-        }
-        let decrease_order_url: &str = &format!(
-            "{}/portfolio/orders/{}",
-            self.base_url.to_string(),
-            order_id
-        );
+        let decrease_order_url = self.build_url(&format!("/portfolio/orders/{}", order_id))?;
 
         match (reduce_by, reduce_to) {
             (Some(_), Some(_)) => {
@@ -272,14 +218,7 @@ impl Kalshi {
         };
 
         let result: SingleOrderResponse = self
-            .client
-            .post(decrease_order_url)
-            .header("Authorization", self.curr_token.clone().unwrap())
-            .header("content-type", "application/json".to_string())
-            .json(&decrease_payload)
-            .send()
-            .await?
-            .json()
+            .http_post(decrease_order_url, &decrease_payload)
             .await?;
 
         Ok(result.order)
@@ -324,14 +263,6 @@ impl Kalshi {
         limit: Option<i32>,
         cursor: Option<String>,
     ) -> Result<(Option<String>, Vec<Fill>), KalshiError> {
-        if self.curr_token == None {
-            return Err(KalshiError::UserInputError(
-                "Not logged in, a valid token is required for requests that require authentication"
-                    .to_string(),
-            ));
-        }
-        let user_fills_url: &str = &format!("{}/portfolio/fills", self.base_url.to_string());
-
         let mut params: Vec<(&str, String)> = Vec::with_capacity(7);
 
         add_param!(params, "ticker", ticker);
@@ -341,19 +272,10 @@ impl Kalshi {
         add_param!(params, "max_ts", max_ts);
         add_param!(params, "order_id", order_id);
 
-        let user_fills_url = reqwest::Url::parse_with_params(user_fills_url, &params)
-            .unwrap_or_else(|err| {
-                eprintln!("{:?}", err);
-                panic!("Internal Parse Error, please contact developer!");
-            });
+        let user_fills_url = self.build_url_with_params("/portfolio/fills", params).unwrap();
 
         let result: MultipleFillsResponse = self
-            .client
-            .get(user_fills_url)
-            .header("Authorization", self.curr_token.clone().unwrap())
-            .send()
-            .await?
-            .json()
+            .http_get(user_fills_url)
             .await?;
 
         return Ok((result.cursor, result.fills));
@@ -388,32 +310,15 @@ impl Kalshi {
         limit: Option<i64>,
         cursor: Option<String>,
     ) -> Result<(Option<String>, Vec<Settlement>), KalshiError> {
-        if self.curr_token == None {
-            return Err(KalshiError::UserInputError(
-                "Not logged in, a valid token is required for requests that require authentication"
-                    .to_string(),
-            ));
-        }
-        let settlements_url: &str = &format!("{}/portfolio/settlements", self.base_url.to_string());
-
         let mut params: Vec<(&str, String)> = Vec::with_capacity(6);
 
         add_param!(params, "limit", limit);
         add_param!(params, "cursor", cursor);
 
-        let settlements_url = reqwest::Url::parse_with_params(settlements_url, &params)
-            .unwrap_or_else(|err| {
-                eprintln!("{:?}", err);
-                panic!("Internal Parse Error, please contact developer!");
-            });
+        let settlements_url = self.build_url_with_params("/portfolio/settlements", params).unwrap();
 
         let result: PortfolioSettlementResponse = self
-            .client
-            .get(settlements_url)
-            .header("Authorization", self.curr_token.clone().unwrap())
-            .send()
-            .await?
-            .json()
+            .http_get(settlements_url)
             .await?;
 
         Ok((result.cursor, result.settlements))
@@ -753,7 +658,7 @@ pub struct Order {
     pub yes_price: i32,
     /// Price of the 'No' option in the order.
     pub no_price: i32,
-    /// Timestamp when the order was created. Optional.
+    /// ISO 8601 Timestamp when the order was created. Optional.
     pub created_time: Option<String>,
     /// Count of fills where the order acted as a taker. Optional.
     pub taker_fill_count: Option<i32>,

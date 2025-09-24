@@ -15,22 +15,22 @@ fn retreive_credentials(setting: APIType) -> Result<(String, String), std::io::E
     match setting {
         APIType::Live => {
             if let Ok(key) = env::var("LIVE_PASSWORD") {
-                println!("got password");
+                tracing::debug!("got password");
                 password = key;
             }
             if let Ok(user) = env::var("LIVE_USER_NAME") {
-                println!("got user");
+                tracing::debug!("got user");
                 username = user;
             }
         }
 
         APIType::Demo => {
             if let Ok(key) = env::var("DEMO_PASSWORD") {
-                println!("got password");
+                tracing::debug!("got password");
                 password = key;
             }
             if let Ok(user) = env::var("DEMO_USER_NAME") {
-                println!("got user");
+                tracing::debug!("got user");
                 username = user;
             }
         }
@@ -40,6 +40,7 @@ fn retreive_credentials(setting: APIType) -> Result<(String, String), std::io::E
 #[tokio::main]
 async fn main() {
     dotenv().ok();
+    tracing_subscriber::fmt::init();
 
     let (username, password) = retreive_credentials(APIType::Demo).unwrap() ;
 
@@ -74,7 +75,7 @@ async fn main() {
     let ny_order_id = bought_order.order_id.clone();
     
     let cancelled_order = kalshi_instance.cancel_order(&ny_order_id).await.unwrap();
-    println!("{:?}", cancelled_order);
+    tracing::debug!("{:?}", cancelled_order);
 
     
 }

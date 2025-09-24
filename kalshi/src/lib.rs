@@ -311,9 +311,9 @@ impl Kalshi {
     /// let kalshi = Kalshi::new(TradingEnvironment::DemoMode);
     /// let token = kalshi.get_user_token();
     /// if let Some(t) = token {
-    ///     println!("Current token: {}", t);
+    ///     tracing::debug!("Current token: {}", t);
     /// } else {
-    ///     println!("No token found");
+    ///     tracing::debug!("No token found");
     /// }
     /// ```
     ///
