@@ -1,38 +1,51 @@
-use crate::KalshiAuth;
+use crate::kalshi_error::KalshiError;
 use crate::kalshi_error::RequestError;
 use crate::utils::api_key_headers;
-use reqwest::Method;
-use crate::kalshi_error::KalshiError;
-use openssl::rsa::{Padding};
-use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
-use openssl::pkey::PKey;
-use openssl::sign::{RsaPssSaltlen, Signer};
+use crate::KalshiAuth;
 use openssl::hash::MessageDigest;
+use openssl::pkey::PKey;
+use openssl::rsa::Padding;
+use openssl::sign::{RsaPssSaltlen, Signer};
+use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
+use reqwest::Method;
 use reqwest::Url;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
-use tracing::{debug, info, warn, error};
+use tracing::{debug, error, info, warn};
 
 use super::Kalshi;
 
 impl Kalshi {
-
     fn auth_headers(&self, path: &str, method: Method) -> HeaderMap {
         let mut headers = HeaderMap::new(); // Initialize HeaderMap here
         match &self.auth {
-            KalshiAuth::ApiKey { key_id, key, ..} => {
+            KalshiAuth::ApiKey { key_id, key, .. } => {
                 let pkey = PKey::private_key_from_pem(key.as_bytes()).unwrap();
                 let mut signer = Signer::new(MessageDigest::sha256(), &pkey).unwrap();
                 signer.set_rsa_padding(Padding::PKCS1_PSS).unwrap();
                 signer.set_rsa_mgf1_md(MessageDigest::sha256()).unwrap();
-                signer.set_rsa_pss_saltlen(RsaPssSaltlen::DIGEST_LENGTH).unwrap();
+                signer
+                    .set_rsa_pss_saltlen(RsaPssSaltlen::DIGEST_LENGTH)
+                    .unwrap();
                 let api_headers = api_key_headers(key_id, &mut signer, path, method).unwrap();
                 for (key_str, value_string) in api_headers {
-                    headers.insert(HeaderName::from_static(key_str), HeaderValue::from_str(&value_string).unwrap());
+                    headers.insert(
+                        HeaderName::from_static(key_str),
+                        HeaderValue::from_str(&value_string).unwrap(),
+                    );
                 }
             }
             KalshiAuth::EmailPassword => {
-                headers.insert(HeaderName::from_static("Authorization"), HeaderValue::from_str(&self.curr_token.clone().expect("Token not found with EmailPassword auth")).unwrap());
+                headers.insert(
+                    HeaderName::from_static("Authorization"),
+                    HeaderValue::from_str(
+                        &self
+                            .curr_token
+                            .clone()
+                            .expect("Token not found with EmailPassword auth"),
+                    )
+                    .unwrap(),
+                );
             }
         }
         headers // Return the HeaderMap
@@ -61,9 +74,10 @@ impl Kalshi {
             .send()
             .await?;
 
-        let req_body_string = serde_json::to_string(body)
-            .unwrap_or_else(|_| "<unserializable body>".to_string());
-        self.process_response::<T>("POST", &url, Some(req_body_string), resp).await
+        let req_body_string =
+            serde_json::to_string(body).unwrap_or_else(|_| "<unserializable body>".to_string());
+        self.process_response::<T>("POST", &url, Some(req_body_string), resp)
+            .await
     }
     pub async fn http_delete<T: DeserializeOwned>(&self, url: Url) -> Result<T, KalshiError> {
         let resp = self
@@ -185,21 +199,16 @@ impl Kalshi {
         params: Vec<(&str, String)>,
     ) -> Result<Url, KalshiError> {
         let base_url_str = format!("{}{}", self.base_url.to_string(), base_path);
-        Url::parse_with_params(&base_url_str, &params)
-            .map_err(|err| {
-                // Convert url::ParseError to KalshiError::RequestError
-                KalshiError::RequestError(RequestError::UrlParseError(err))
-            })
+        Url::parse_with_params(&base_url_str, &params).map_err(|err| {
+            // Convert url::ParseError to KalshiError::RequestError
+            KalshiError::RequestError(RequestError::UrlParseError(err))
+        })
     }
-    pub fn build_url(
-        &self,
-        base_path: &str,
-    ) -> Result<Url, KalshiError> {
+    pub fn build_url(&self, base_path: &str) -> Result<Url, KalshiError> {
         let base_url_str = format!("{}{}", self.base_url.to_string(), base_path);
-        Url::parse(&base_url_str)
-            .map_err(|err| {
-                // Convert url::ParseError to KalshiError::RequestError
-                KalshiError::RequestError(RequestError::UrlParseError(err))
-            })
+        Url::parse(&base_url_str).map_err(|err| {
+            // Convert url::ParseError to KalshiError::RequestError
+            KalshiError::RequestError(RequestError::UrlParseError(err))
+        })
     }
 }

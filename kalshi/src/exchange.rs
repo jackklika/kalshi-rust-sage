@@ -18,9 +18,7 @@ impl Kalshi {
     pub async fn get_exchange_status(&self) -> Result<ExchangeStatus, KalshiError> {
         let exchange_status_url = self.build_url("/exchange/status")?;
 
-        let result: ExchangeStatus = self
-            .http_get(exchange_status_url)
-            .await?;
+        let result: ExchangeStatus = self.http_get(exchange_status_url).await?;
 
         return Ok(result);
     }
@@ -40,9 +38,7 @@ impl Kalshi {
     pub async fn get_exchange_schedule(&self) -> Result<ExchangeScheduleStandard, KalshiError> {
         let exchange_schedule_url = self.build_url("/exchange/schedule")?;
 
-        let result: ExchangeScheduleResponse = self
-            .http_get(exchange_schedule_url)
-            .await?;
+        let result: ExchangeScheduleResponse = self.http_get(exchange_schedule_url).await?;
         return Ok(result.schedule);
     }
 }

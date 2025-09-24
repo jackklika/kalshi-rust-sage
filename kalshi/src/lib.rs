@@ -120,15 +120,16 @@ use std::{fmt::Debug, sync::Arc};
 #[macro_use]
 mod utils;
 mod auth;
+mod event;
 mod exchange;
+mod http;
 mod kalshi_error;
 mod market;
-mod http;
 mod portfolio;
-mod event;
 #[cfg(feature = "websockets")]
 mod websockets;
 
+pub use event::*;
 pub use exchange::*;
 pub use kalshi_error::*;
 pub use market::*;
@@ -139,7 +140,6 @@ use openssl::{
     sign::{RsaPssSaltlen, Signer},
 };
 pub use portfolio::*;
-pub use event::*;
 
 #[cfg(feature = "websockets")]
 pub use websockets::*;

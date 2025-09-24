@@ -67,14 +67,11 @@ pub enum KalshiWebsocketResponse {
     },
 }
 
-
 #[derive(Deserialize, Debug, Clone)]
 pub struct KalshiSubscribeMessage {
     pub channel: KalshiChannel,
     pub sid: u32,
 }
-
-
 
 #[derive(Deserialize, Debug, Clone)]
 pub struct KalshiOrderbookErrorMessage {

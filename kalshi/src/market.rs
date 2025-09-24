@@ -31,9 +31,7 @@ impl Kalshi {
             .build_url_with_params(&format!("/events/{}", event_ticker), params)
             .unwrap();
 
-        let result: SingleEventResponse = self
-            .http_get(single_event_url)
-            .await?;
+        let result: SingleEventResponse = self.http_get(single_event_url).await?;
 
         return Ok(result.event);
     }
@@ -55,9 +53,7 @@ impl Kalshi {
     pub async fn get_single_market(&self, ticker: &String) -> Result<Market, KalshiError> {
         let single_market_url = self.build_url(&format!("/markets/{}", ticker))?;
 
-        let result: SingleMarketResponse = self
-            .http_get(single_market_url)
-            .await?;
+        let result: SingleMarketResponse = self.http_get(single_market_url).await?;
 
         return Ok(result.market);
     }
@@ -119,9 +115,7 @@ impl Kalshi {
 
         let markets_url = self.build_url_with_params("/markets", params).unwrap();
 
-        let result: PublicMarketsResponse = self
-            .http_get(markets_url)
-            .await?;
+        let result: PublicMarketsResponse = self.http_get(markets_url).await?;
 
         Ok((result.cursor, result.markets))
     }
@@ -174,9 +168,7 @@ impl Kalshi {
 
         let events_url = self.build_url_with_params("/events", params).unwrap();
 
-        let result: PublicEventsResponse = self
-            .http_get(events_url)
-            .await?;
+        let result: PublicEventsResponse = self.http_get(events_url).await?;
 
         return Ok((result.cursor, result.events));
     }
@@ -200,9 +192,7 @@ impl Kalshi {
     pub async fn get_series(&self, ticker: &String) -> Result<Series, KalshiError> {
         let series_url = self.build_url(&format!("/series/{}", ticker))?;
 
-        let result: SeriesResponse = self
-            .http_get(series_url)
-            .await?;
+        let result: SeriesResponse = self.http_get(series_url).await?;
 
         return Ok(result.series);
     }
@@ -236,12 +226,9 @@ impl Kalshi {
         let mut params: Vec<(&str, String)> = Vec::new();
         add_param!(params, "depth", depth);
 
-        let orderbook_url = self.build_url_with_params(path, params)
-            .map_err(|e| e)?;
+        let orderbook_url = self.build_url_with_params(path, params).map_err(|e| e)?;
 
-        let result: OrderBookResponse = self
-            .http_get(orderbook_url)
-            .await?;
+        let result: OrderBookResponse = self.http_get(orderbook_url).await?;
 
         return Ok(result.orderbook);
     }
@@ -293,9 +280,7 @@ impl Kalshi {
             .build_url_with_params(&format!("/markets/{}/history", ticker), params)
             .unwrap();
 
-        let result: MarketHistoryResponse = self
-            .http_get(market_history_url)
-            .await?;
+        let result: MarketHistoryResponse = self.http_get(market_history_url).await?;
 
         Ok((result.cursor, result.history))
     }
@@ -342,11 +327,11 @@ impl Kalshi {
         add_param!(params, "max_ts", max_ts);
         add_param!(params, "ticker", ticker);
 
-        let trades_url = self.build_url_with_params("/markets/trades", params).unwrap();
+        let trades_url = self
+            .build_url_with_params("/markets/trades", params)
+            .unwrap();
 
-        let result: PublicTradesResponse = self
-            .http_get(trades_url)
-            .await?;
+        let result: PublicTradesResponse = self.http_get(trades_url).await?;
 
         Ok((result.cursor, result.trades))
     }

@@ -28,9 +28,7 @@ impl Kalshi {
     ) -> Result<EventMetadata, KalshiError> {
         let path = format!("/events/{}/metadata", event_ticker);
         let url = self.build_url_with_params(&path, Vec::new())?;
-        let result: EventMetadata = self
-            .http_get(url)
-            .await?;
+        let result: EventMetadata = self.http_get(url).await?;
         Ok(result)
     }
 
@@ -58,9 +56,7 @@ impl Kalshi {
     ) -> Result<EventCandlesticks, KalshiError> {
         let path = format!("/events/{}/candlesticks", event_ticker);
         let url = self.build_url_with_params(&path, Vec::new())?;
-        let result: EventCandlesticks = self
-            .http_get(url)
-            .await?;
+        let result: EventCandlesticks = self.http_get(url).await?;
         Ok(result)
     }
 
@@ -92,9 +88,7 @@ impl Kalshi {
     ) -> Result<Vec<ForecastPercentilesSeries>, KalshiError> {
         let path = format!("/cached/events/{}/forecast_history", event_ticker);
         let url = self.build_url_with_params(&path, Vec::new())?;
-        let result: ForecastHistoryResponse = self
-            .http_get(url)
-            .await?;
+        let result: ForecastHistoryResponse = self.http_get(url).await?;
         Ok(result.forecast_history)
     }
 
@@ -113,9 +107,7 @@ impl Kalshi {
         add_param!(params, "with_nested_markets", Some(false));
 
         let url = self.build_url_with_params(&path, params)?;
-        let result: EventWithMarketsResponse = self
-            .http_get(url)
-            .await?;
+        let result: EventWithMarketsResponse = self.http_get(url).await?;
         Ok(result.markets)
     }
 }

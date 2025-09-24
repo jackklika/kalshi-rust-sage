@@ -27,9 +27,7 @@ impl Kalshi {
     ///
     pub async fn get_balance(&self) -> Result<i64, KalshiError> {
         let balance_url = self.build_url("/portfolio/balance")?;
-        let result: BalanceResponse = self
-            .http_get(balance_url)
-            .await?;
+        let result: BalanceResponse = self.http_get(balance_url).await?;
         Ok(result.balance)
     }
 
@@ -74,7 +72,6 @@ impl Kalshi {
         limit: Option<i32>,
         cursor: Option<String>,
     ) -> Result<(Option<String>, Vec<Order>), KalshiError> {
-
         let mut params: Vec<(&str, String)> = Vec::with_capacity(7);
 
         add_param!(params, "ticker", ticker);
@@ -85,11 +82,11 @@ impl Kalshi {
         add_param!(params, "event_ticker", event_ticker);
         add_param!(params, "status", status);
 
-        let user_orders_url = self.build_url_with_params("/portfolio/orders", params).unwrap();
+        let user_orders_url = self
+            .build_url_with_params("/portfolio/orders", params)
+            .unwrap();
 
-        let result: MultipleOrderResponse = self
-            .http_get(user_orders_url)
-            .await?;
+        let result: MultipleOrderResponse = self.http_get(user_orders_url).await?;
 
         tracing::debug!("Received orders: {:?}", result.orders);
 
@@ -121,9 +118,7 @@ impl Kalshi {
     pub async fn get_single_order(&self, order_id: &String) -> Result<Order, KalshiError> {
         let user_order_url = self.build_url(&format!("/portfolio/orders/{}", order_id))?;
 
-        let result: SingleOrderResponse = self
-            .http_get(user_order_url)
-            .await?;
+        let result: SingleOrderResponse = self.http_get(user_order_url).await?;
 
         return Ok(result.order);
     }
@@ -155,9 +150,7 @@ impl Kalshi {
     pub async fn cancel_order(&self, order_id: &str) -> Result<(Order, i32), KalshiError> {
         let cancel_order_url = self.build_url(&format!("/portfolio/orders/{}", order_id))?;
 
-        let result: DeleteOrderResponse = self
-            .http_delete(cancel_order_url)
-            .await?;
+        let result: DeleteOrderResponse = self.http_delete(cancel_order_url).await?;
 
         Ok((result.order, result.reduced_by))
     }
@@ -272,11 +265,11 @@ impl Kalshi {
         add_param!(params, "max_ts", max_ts);
         add_param!(params, "order_id", order_id);
 
-        let user_fills_url = self.build_url_with_params("/portfolio/fills", params).unwrap();
+        let user_fills_url = self
+            .build_url_with_params("/portfolio/fills", params)
+            .unwrap();
 
-        let result: MultipleFillsResponse = self
-            .http_get(user_fills_url)
-            .await?;
+        let result: MultipleFillsResponse = self.http_get(user_fills_url).await?;
 
         return Ok((result.cursor, result.fills));
     }
@@ -315,11 +308,11 @@ impl Kalshi {
         add_param!(params, "limit", limit);
         add_param!(params, "cursor", cursor);
 
-        let settlements_url = self.build_url_with_params("/portfolio/settlements", params).unwrap();
+        let settlements_url = self
+            .build_url_with_params("/portfolio/settlements", params)
+            .unwrap();
 
-        let result: PortfolioSettlementResponse = self
-            .http_get(settlements_url)
-            .await?;
+        let result: PortfolioSettlementResponse = self.http_get(settlements_url).await?;
 
         Ok((result.cursor, result.settlements))
     }
@@ -375,9 +368,7 @@ impl Kalshi {
 
         let positions_url_with_params = self.build_url_with_params(positions_url, params).unwrap();
 
-        let result: GetPositionsResponse = self
-            .http_get(positions_url_with_params)
-            .await?;
+        let result: GetPositionsResponse = self.http_get(positions_url_with_params).await?;
 
         Ok((
             result.cursor,
@@ -497,9 +488,7 @@ impl Kalshi {
             time_in_force: time_in_force,
         };
 
-        let order_resp: SingleOrderResponse = self
-            .http_post(order_url, &order_payload)
-            .await?;
+        let order_resp: SingleOrderResponse = self.http_post(order_url, &order_payload).await?;
         return Ok(order_resp.order);
     }
 
