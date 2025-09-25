@@ -145,7 +145,6 @@ pub use portfolio::*;
 pub use websockets::*;
 
 // imports
-use reqwest;
 
 /// The Kalshi struct is the core of the kalshi-crate. It acts as the interface
 /// between the user and the market, abstracting away the meat of requests
@@ -249,7 +248,7 @@ impl Kalshi {
     /// ```
     ///
     pub fn new(trading_env: TradingEnvironment) -> Self {
-        return Kalshi {
+        Kalshi {
             base_url: utils::build_base_url(trading_env).to_string(),
             #[cfg(feature = "websockets")]
             ws_url: utils::build_ws_url(trading_env).to_string(),
@@ -257,7 +256,7 @@ impl Kalshi {
             member_id: None,
             client: reqwest::Client::new(),
             auth: KalshiAuth::EmailPassword,
-        };
+        }
     }
 
     /// Creates a new instance of Kalshi with the specified trading environment.
@@ -286,7 +285,7 @@ impl Kalshi {
     ///
     pub fn new_with_api_key(trading_env: TradingEnvironment, key_id: String, key: String) -> Self {
         // Initialize signer if api key is passed
-        return Kalshi {
+        Kalshi {
             base_url: utils::build_base_url(trading_env).to_string(),
             #[cfg(feature = "websockets")]
             ws_url: utils::build_ws_url(trading_env).to_string(),
@@ -294,7 +293,7 @@ impl Kalshi {
             member_id: None,
             client: reqwest::Client::new(),
             auth: KalshiAuth::build_api_key(key_id, key),
-        };
+        }
     }
 
     /// Retrieves the current user authentication token, if available.
@@ -319,8 +318,8 @@ impl Kalshi {
     ///
     pub fn get_user_token(&self) -> Option<String> {
         match &self.curr_token {
-            Some(val) => return Some(val.clone()),
-            _ => return None,
+            Some(val) => Some(val.clone()),
+            _ => None,
         }
     }
 

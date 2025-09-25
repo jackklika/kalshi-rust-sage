@@ -93,16 +93,13 @@ impl<'a> KalshiWebsocketClient {
             }
         }
         let req_clone = req.clone();
-        let (ws_stream, res) = connect_async(req).await.inspect_err(|e| match e {
-            tokio_tungstenite::tungstenite::Error::Http(res) => {
-                if let Some(body) = res.body() {
-                    if let Ok(error_body) = String::from_utf8(body.to_vec()) {
-                        tracing::error!("Request was {:?}", req_clone);
-                        tracing::error!("Kalshi error response was {}", error_body);
-                    }
+        let (ws_stream, res) = connect_async(req).await.inspect_err(|e| if let tokio_tungstenite::tungstenite::Error::Http(res) = e {
+            if let Some(body) = res.body() {
+                if let Ok(error_body) = String::from_utf8(body.to_vec()) {
+                    tracing::error!("Request was {:?}", req_clone);
+                    tracing::error!("Kalshi error response was {}", error_body);
                 }
             }
-            _ => {}
         })?;
 
         let (to_kalshi_tx, to_kalshi_rx) = unbounded_channel::<KalshiCommand>();
@@ -134,7 +131,7 @@ impl<'a> KalshiWebsocketClient {
         market_tickers: Vec<String>,
     ) -> Result<u32, Box<dyn Error>> {
         let cmd_id = self.next_cmd_id;
-        if channels.contains(&KalshiChannel::OrderbookDelta) && market_tickers.len() == 0 {
+        if channels.contains(&KalshiChannel::OrderbookDelta) && market_tickers.is_empty() {
             return Err("Cannot subscribe to orderbook deltas for all market tickers, provide at least one market ticker".to_string().into());
         }
         let msg = KalshiCommand::Subscribe {
@@ -250,11 +247,8 @@ async fn kalshi_ws_handler(
                 }
             }
             _ = heartbeat.tick().fuse() => {
-                match stream.send(Message::Ping(vec![])).await {
-                    Err(e) => {
-                        from_kalshi_tx.send(Err(KalshiWebsocketError::WebSocketError(e.to_string())));
-                    },
-                    _ => {}
+                if let Err(e) = stream.send(Message::Ping(vec![])).await {
+                    from_kalshi_tx.send(Err(KalshiWebsocketError::WebSocketError(e.to_string())));
                 }
             }
             item = stream.select_next_some() => {

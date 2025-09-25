@@ -21,7 +21,7 @@ impl<'a> Kalshi {
     /// kalshi_instance.login("johndoe@example.com", "example_password").await?;
     /// ```
     pub async fn login(&mut self, user: &str, password: &str) -> Result<(), KalshiError> {
-        let login_url: &str = &format!("{}/login", self.base_url.to_string());
+        let login_url: &str = &format!("{}/login", self.base_url);
 
         let login_payload = LoginPayload {
             email: user.to_string(),
@@ -40,7 +40,7 @@ impl<'a> Kalshi {
         self.curr_token = Some(format!("Bearer {}", result.token));
         self.member_id = Some(result.member_id);
 
-        return Ok(());
+        Ok(())
     }
 
     /// Asynchronously logs a user out of the Kalshi exchange.
@@ -57,7 +57,7 @@ impl<'a> Kalshi {
     /// kalshi_instance.logout().await?;
     /// ```
     pub async fn logout(&self) -> Result<(), KalshiError> {
-        let logout_url: &str = &format!("{}/logout", self.base_url.to_string());
+        let logout_url: &str = &format!("{}/logout", self.base_url);
 
         self.client
             .post(logout_url)
@@ -66,7 +66,7 @@ impl<'a> Kalshi {
             .send()
             .await?;
 
-        return Ok(());
+        Ok(())
     }
 }
 

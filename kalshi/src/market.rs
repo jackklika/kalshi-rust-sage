@@ -33,7 +33,7 @@ impl Kalshi {
 
         let result: SingleEventResponse = self.http_get(single_event_url).await?;
 
-        return Ok(result.event);
+        Ok(result.event)
     }
 
     /// Retrieves detailed information about a specific market from the Kalshi exchange.
@@ -55,7 +55,7 @@ impl Kalshi {
 
         let result: SingleMarketResponse = self.http_get(single_market_url).await?;
 
-        return Ok(result.market);
+        Ok(result.market)
     }
     /// Asynchronously retrieves information about multiple markets from the Kalshi exchange.
     ///
@@ -170,7 +170,7 @@ impl Kalshi {
 
         let result: PublicEventsResponse = self.http_get(events_url).await?;
 
-        return Ok((result.cursor, result.events));
+        Ok((result.cursor, result.events))
     }
     /// Asynchronously retrieves detailed information about a specific series from the Kalshi exchange.
     ///
@@ -194,7 +194,7 @@ impl Kalshi {
 
         let result: SeriesResponse = self.http_get(series_url).await?;
 
-        return Ok(result.series);
+        Ok(result.series)
     }
     /// Asynchronously retrieves the order book for a specific market in the Kalshi exchange.
     ///
@@ -226,11 +226,11 @@ impl Kalshi {
         let mut params: Vec<(&str, String)> = Vec::new();
         add_param!(params, "depth", depth);
 
-        let orderbook_url = self.build_url_with_params(path, params).map_err(|e| e)?;
+        let orderbook_url = self.build_url_with_params(path, params)?;
 
         let result: OrderBookResponse = self.http_get(orderbook_url).await?;
 
-        return Ok(result.orderbook);
+        Ok(result.orderbook)
     }
 
     /// Asynchronously retrieves the market history for a given market on the Kalshi exchange.

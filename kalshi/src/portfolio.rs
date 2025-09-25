@@ -90,7 +90,7 @@ impl Kalshi {
 
         tracing::debug!("Received orders: {:?}", result.orders);
 
-        return Ok((result.cursor, result.orders));
+        Ok((result.cursor, result.orders))
     }
 
     /// Retrieves detailed information about a specific order from the Kalshi exchange.
@@ -120,7 +120,7 @@ impl Kalshi {
 
         let result: SingleOrderResponse = self.http_get(user_order_url).await?;
 
-        return Ok(result.order);
+        Ok(result.order)
     }
 
     /// Cancels an existing order on the Kalshi exchange.
@@ -206,8 +206,8 @@ impl Kalshi {
         }
 
         let decrease_payload = DecreaseOrderPayload {
-            reduce_by: reduce_by,
-            reduce_to: reduce_to,
+            reduce_by,
+            reduce_to,
         };
 
         let result: SingleOrderResponse = self
@@ -271,7 +271,7 @@ impl Kalshi {
 
         let result: MultipleFillsResponse = self.http_get(user_fills_url).await?;
 
-        return Ok((result.cursor, result.fills));
+        Ok((result.cursor, result.fills))
     }
 
     /// Retrieves a list of portfolio settlements from the Kalshi exchange.
@@ -443,24 +443,21 @@ impl Kalshi {
         time_in_force: Option<TimeInForce>,
     ) -> Result<Order, KalshiError> {
         let order_url = self.build_url("/portfolio/orders")?;
-        match input_type {
-            OrderType::Limit => match (no_price, yes_price) {
-                (Some(_), Some(_)) => {
-                    return Err(KalshiError::UserInputError(
-                        "Can only provide no_price exclusive or yes_price, can't provide both"
+        if let OrderType::Limit = input_type { match (no_price, yes_price) {
+            (Some(_), Some(_)) => {
+                return Err(KalshiError::UserInputError(
+                    "Can only provide no_price exclusive or yes_price, can't provide both"
+                        .to_string(),
+                ));
+            }
+            (None, None) => {
+                return Err(KalshiError::UserInputError(
+                        "Must provide either no_price exclusive or yes_price, can't provide neither"
                             .to_string(),
                     ));
-                }
-                (None, None) => {
-                    return Err(KalshiError::UserInputError(
-                            "Must provide either no_price exclusive or yes_price, can't provide neither"
-                                .to_string(),
-                        ));
-                }
-                _ => {}
-            },
+            }
             _ => {}
-        }
+        } }
 
         let unwrapped_id = match client_order_id {
             Some(id) => id,
@@ -468,28 +465,28 @@ impl Kalshi {
         };
 
         let order_payload = CreateOrderPayload {
-            action: action,
+            action,
             client_order_id: unwrapped_id,
-            count: count,
-            side: side,
-            ticker: ticker,
+            count,
+            side,
+            ticker,
             r#type: input_type,
-            buy_max_cost: buy_max_cost,
-            expiration_ts: expiration_ts,
-            no_price: no_price,
-            sell_position_floor: sell_position_floor,
-            yes_price: yes_price,
+            buy_max_cost,
+            expiration_ts,
+            no_price,
+            sell_position_floor,
+            yes_price,
             no_price_dollars: None,
             yes_price_dollars: None,
             order_group_id: None,
             post_only: None,
             sell_position_capped: None,
             self_trade_prevention_type: None,
-            time_in_force: time_in_force,
+            time_in_force,
         };
 
         let order_resp: SingleOrderResponse = self.http_post(order_url, &order_payload).await?;
-        return Ok(order_resp.order);
+        Ok(order_resp.order)
     }
 
     pub async fn batch_cancel_order(

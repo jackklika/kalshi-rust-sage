@@ -198,14 +198,14 @@ impl Kalshi {
         base_path: &str,
         params: Vec<(&str, String)>,
     ) -> Result<Url, KalshiError> {
-        let base_url_str = format!("{}{}", self.base_url.to_string(), base_path);
+        let base_url_str = format!("{}{}", self.base_url, base_path);
         Url::parse_with_params(&base_url_str, &params).map_err(|err| {
             // Convert url::ParseError to KalshiError::RequestError
             KalshiError::RequestError(RequestError::UrlParseError(err))
         })
     }
     pub fn build_url(&self, base_path: &str) -> Result<Url, KalshiError> {
-        let base_url_str = format!("{}{}", self.base_url.to_string(), base_path);
+        let base_url_str = format!("{}{}", self.base_url, base_path);
         Url::parse(&base_url_str).map_err(|err| {
             // Convert url::ParseError to KalshiError::RequestError
             KalshiError::RequestError(RequestError::UrlParseError(err))

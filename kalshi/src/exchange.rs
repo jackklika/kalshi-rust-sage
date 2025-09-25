@@ -20,7 +20,7 @@ impl Kalshi {
 
         let result: ExchangeStatus = self.http_get(exchange_status_url).await?;
 
-        return Ok(result);
+        Ok(result)
     }
 
     /// Asynchronously retrieves the exchange's trading schedule.
@@ -39,7 +39,7 @@ impl Kalshi {
         let exchange_schedule_url = self.build_url("/exchange/schedule")?;
 
         let result: ExchangeScheduleResponse = self.http_get(exchange_schedule_url).await?;
-        return Ok(result.schedule);
+        Ok(result.schedule)
     }
 }
 

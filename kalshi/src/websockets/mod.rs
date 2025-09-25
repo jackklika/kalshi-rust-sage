@@ -35,8 +35,8 @@ impl KalshiChannel {
     }
 }
 
-impl Into<&'static str> for KalshiChannel {
-    fn into(self) -> &'static str {
-        self.as_str()
+impl From<KalshiChannel> for &'static str {
+    fn from(val: KalshiChannel) -> Self {
+        val.as_str()
     }
 }
