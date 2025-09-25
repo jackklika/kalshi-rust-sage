@@ -534,6 +534,7 @@ impl Kalshi {
 #[derive(Debug, Serialize, Deserialize)]
 struct BalanceResponse {
     balance: i64,
+    updated_ts: Option<i64>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -640,34 +641,34 @@ pub struct Order {
     pub ticker: String,
     /// Current status of the order (e.g., resting, executed).
     pub status: OrderStatus,
-    /// Price of the 'Yes' option in the order.
-    pub yes_price: i32,
-    /// Price of the 'No' option in the order.
-    pub no_price: i32,
+    /// Price of the 'Yes' option in the order (cents).
+    pub yes_price: i64,
+    /// Price of the 'No' option in the order (cents).
+    pub no_price: i64,
+    /// Price of the 'Yes' option in dollars (fixed-point).
+    pub yes_price_dollars: Option<String>,
+    /// Price of the 'No' option in dollars (fixed-point).
+    pub no_price_dollars: Option<String>,
     /// ISO 8601 Timestamp when the order was created. Optional.
     pub created_time: Option<String>,
-    /// Count of fills where the order acted as a taker. Optional.
-    pub taker_fill_count: Option<i32>,
-    /// Total cost of taker fills. Optional.
-    pub taker_fill_cost: Option<i32>,
-    /// Count of order placements. Optional.
-    pub place_count: Option<i32>,
-    /// Count of order decreases. Optional.
-    pub decrease_count: Option<i32>,
-    /// Count of fills where the order acted as a maker. Optional.
-    pub maker_fill_count: Option<i32>,
-    /// Count of FCC (Financial Crime Compliance) cancellations. Optional.
-    pub fcc_cancel_count: Option<i32>,
-    /// Count of cancellations at market close. Optional.
-    pub close_cancel_count: Option<i32>,
+    /// Total number of filled contracts (maker + taker). Optional.
+    pub fill_count: Option<i32>,
+    /// The initial size of the order (contract units). Optional.
+    pub initial_count: Option<i32>,
+    /// Total cost of taker fills in cents. Optional.
+    pub taker_fill_cost: Option<i64>,
+    /// Fees incurred as a taker in cents. Optional.
+    pub taker_fees: Option<i64>,
+    /// Total cost of maker fills in cents. Optional.
+    pub maker_fill_cost: Option<i64>,
+    /// Fees incurred as a maker in cents. Optional.
+    pub maker_fees: Option<i64>,
     /// Remaining count of the order. Optional.
     pub remaining_count: Option<i32>,
     /// Position of the order in the queue. Optional.
     pub queue_position: Option<i32>,
     /// Expiration time of the order. Optional.
     pub expiration_time: Option<String>,
-    /// Fees incurred as a taker. Optional.
-    pub taker_fees: Option<i32>,
     /// The action (buy/sell) of the order.
     pub action: Action,
     /// The side (Yes/No) of the order.
@@ -680,6 +681,22 @@ pub struct Order {
     pub client_order_id: String,
     /// Group identifier for the order.
     pub order_group_id: String,
+    /// Self-trade prevention type. Optional.
+    pub self_trade_prevention_type: Option<String>,
+
+    // Legacy/extra counters maintained for backward compatibility (optional)
+    /// Count of fills where the order acted as a taker. Optional.
+    pub taker_fill_count: Option<i32>,
+    /// Count of order placements. Optional.
+    pub place_count: Option<i32>,
+    /// Count of order decreases. Optional.
+    pub decrease_count: Option<i32>,
+    /// Count of fills where the order acted as a maker. Optional.
+    pub maker_fill_count: Option<i32>,
+    /// Count of FCC (Financial Crime Compliance) cancellations. Optional.
+    pub fcc_cancel_count: Option<i32>,
+    /// Count of cancellations at market close. Optional.
+    pub close_cancel_count: Option<i32>,
 }
 
 /// A completed transaction (a 'fill') in the Kalshi exchange.
@@ -722,17 +739,19 @@ pub struct Settlement {
     pub market_result: String,
     /// The quantity involved in the 'No' position.
     pub no_count: i64,
-    /// The total cost associated with the 'No' position.
+    /// The total cost associated with the 'No' position (cents).
     pub no_total_cost: i64,
-    /// The revenue generated from the settlement, in cents.
+    /// The revenue generated from the settlement (cents).
     pub revenue: i64,
     /// The timestamp when the settlement occurred.
     pub settled_time: String,
     /// The ticker of the market that was settled.
     pub ticker: String,
+    /// Payout of a single YES contract (cents).
+    pub value: i64,
     /// The quantity involved in the 'Yes' position.
     pub yes_count: i64,
-    /// The total cost associated with the 'Yes' position, in cents.
+    /// The total cost associated with the 'Yes' position (cents).
     pub yes_total_cost: i64,
 }
 
@@ -744,16 +763,25 @@ pub struct Settlement {
 pub struct EventPosition {
     /// The total exposure amount in the event.
     pub event_exposure: i64,
+    /// The total exposure amount in the event in dollars (fixed-point string).
+    pub event_exposure_dollars: Option<String>,
     /// The ticker of the event.
     pub event_ticker: String,
     /// The total fees paid in the event in cents.
     pub fees_paid: i64,
+    /// The total fees paid in the event in dollars (fixed-point string).
+    pub fees_paid_dollars: Option<String>,
     /// The realized profit or loss in the event in cents.
     pub realized_pnl: i64,
+    /// The realized profit or loss in the event in dollars (fixed-point string).
+    pub realized_pnl_dollars: Option<String>,
     /// The count of resting (active but unfilled) orders in the event.
     pub resting_order_count: i32,
     /// The total cost incurred in the event in cents.
     pub total_cost: i64,
+    /// The total cost incurred in the event in dollars (fixed-point string).
+    pub total_cost_dollars: Option<String>,
+
 }
 
 /// A user's position in a specific market on the Kalshi exchange.
@@ -765,18 +793,28 @@ pub struct EventPosition {
 pub struct MarketPosition {
     /// The total fees paid in the market in cents.
     pub fees_paid: i64,
+    /// The total fees paid in the market in dollars (fixed-point string).
+    pub fees_paid_dollars: Option<String>,
     /// The total exposure amount in the market.
     pub market_exposure: i64,
+    /// The total exposure amount in the market in dollars (fixed-point string).
+    pub market_exposure_dollars: Option<String>,
     /// The current position of the user in the market.
     pub position: i32,
     /// The realized profit or loss in the market in cents.
     pub realized_pnl: i64,
+    /// The realized profit or loss in the market in dollars (fixed-point string).
+    pub realized_pnl_dollars: Option<String>,
     /// The count of resting orders in the market.
     pub resting_orders_count: i32,
     /// The ticker of the market.
     pub ticker: String,
     /// The total traded amount in the market.
     pub total_traded: i64,
+    /// The total traded amount in the market in dollars (fixed-point string).
+    pub total_traded_dollars: Option<String>,
+    /// Last time the position is updated.
+    pub last_updated_ts: Option<String>,
 }
 
 /// Represents the necessary fields for creating an order in the Kalshi exchange.

@@ -171,9 +171,13 @@ pub struct MarketCandlestick {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BidAskDistribution {
     pub open: i64,
+    pub open_dollars: Option<String>,
     pub high: i64,
+    pub high_dollars: Option<String>,
     pub low: i64,
+    pub low_dollars: Option<String>,
     pub close: i64,
+    pub close_dollars: Option<String>,
 }
 
 /// OHLC and additional stats for traded YES prices during the period.
@@ -181,11 +185,17 @@ pub struct BidAskDistribution {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct PriceDistribution {
     pub open: Option<i64>,
+    pub open_dollars: Option<String>,
     pub high: Option<i64>,
+    pub high_dollars: Option<String>,
     pub low: Option<i64>,
+    pub low_dollars: Option<String>,
     pub close: Option<i64>,
+    pub close_dollars: Option<String>,
     pub mean: Option<i64>,
+    pub mean_dollars: Option<String>,
     pub previous: Option<i64>,
+    pub previous_dollars: Option<String>,
 }
 
 /// A single forecast history series entry for an event.

@@ -30,12 +30,12 @@ impl Kalshi {
     /// maintenance windows.
     ///
     /// # Returns
-    /// - `Ok(ExchangeScheduleStandard)`: ExchangeScheduleStandard object on success.
+    /// - `Ok(ExchangeSchedule)`: ExchangeSchedule object on success.
     /// - `Err(KalshiError)`: Error in case of a failure in the HTTP request or response parsing.
     /// ```
     /// kalshi_instance.get_exchange_schedule().await.unwrap();
     /// ```
-    pub async fn get_exchange_schedule(&self) -> Result<ExchangeScheduleStandard, KalshiError> {
+    pub async fn get_exchange_schedule(&self) -> Result<ExchangeSchedule, KalshiError> {
         let exchange_schedule_url = self.build_url("/exchange/schedule")?;
 
         let result: ExchangeScheduleResponse = self.http_get(exchange_schedule_url).await?;
@@ -45,15 +45,15 @@ impl Kalshi {
 
 /// Represents the standard trading hours and maintenance windows of the exchange.
 #[derive(Debug, Deserialize, Serialize)]
-pub struct ExchangeScheduleStandard {
-    pub standard_hours: StandardHours,
-    pub maintenance_windows: Vec<String>,
+pub struct ExchangeSchedule {
+    pub maintenance_windows: Vec<MaintenanceWindow>,
+    pub standard_hours: Vec<WeeklySchedule>,
 }
 
 /// Internal struct used for deserializing the response from the exchange schedule endpoint.
 #[derive(Debug, Deserialize, Serialize)]
 struct ExchangeScheduleResponse {
-    schedule: ExchangeScheduleStandard,
+    schedule: ExchangeSchedule,
 }
 
 /// Represents the status of the exchange, including trading and exchange activity.
@@ -61,23 +61,33 @@ struct ExchangeScheduleResponse {
 pub struct ExchangeStatus {
     pub trading_active: bool,
     pub exchange_active: bool,
+    pub exchange_estimated_resume_time: Option<String>,
 }
 
-/// Contains the daily schedule for each day of the week.
+/// A maintenance window during which the exchange may be unavailable.
 #[derive(Debug, Deserialize, Serialize)]
-pub struct StandardHours {
-    pub monday: DaySchedule,
-    pub tuesday: DaySchedule,
-    pub wednesday: DaySchedule,
-    pub thursday: DaySchedule,
-    pub friday: DaySchedule,
-    pub saturday: DaySchedule,
-    pub sunday: DaySchedule,
+pub struct MaintenanceWindow {
+    pub start_datetime: String,
+    pub end_datetime: String,
+}
+
+/// A weekly schedule with trading sessions for each day.
+#[derive(Debug, Deserialize, Serialize)]
+pub struct WeeklySchedule {
+    pub start_time: String,
+    pub end_time: String,
+    pub monday: Vec<DailySchedule>,
+    pub tuesday: Vec<DailySchedule>,
+    pub wednesday: Vec<DailySchedule>,
+    pub thursday: Vec<DailySchedule>,
+    pub friday: Vec<DailySchedule>,
+    pub saturday: Vec<DailySchedule>,
+    pub sunday: Vec<DailySchedule>,
 }
 
 /// Represents the opening and closing times of the exchange for a single day.
 #[derive(Debug, Deserialize, Serialize)]
-pub struct DaySchedule {
+pub struct DailySchedule {
     pub open_time: String,
     pub close_time: String,
 }

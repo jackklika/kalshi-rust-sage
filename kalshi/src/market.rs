@@ -413,11 +413,11 @@ pub struct Market {
     pub open_time: String,
     /// Closing time of the market.
     pub close_time: String,
-    /// Expected expiration time of the market.
+    /// Expected expiration time of the market (optional; forecasted).
     pub expected_expiration_time: Option<String>,
-    /// Actual expiration time of the market.
+    /// Expiration time of the market.
     pub expiration_time: Option<String>,
-    /// Latest possible expiration time of the market.
+    /// Latest possible expiration time of the market (upper bound).
     pub latest_expiration_time: String,
     /// Countdown in seconds to the settlement.
     pub settlement_timer_seconds: i64,
@@ -427,34 +427,54 @@ pub struct Market {
     pub response_price_units: String,
     /// Notional value of the market.
     pub notional_value: i64,
+    /// Notional value in dollars (fixed-point string like "0.2300").
+    pub notional_value_dollars: Option<String>,
     /// Minimum price movement in the market.
     pub tick_size: i64,
     /// Current bid price for the 'Yes' option.
     pub yes_bid: i64,
+    /// Current bid price for the 'Yes' option in dollars.
+    pub yes_bid_dollars: Option<String>,
     /// Current ask price for the 'Yes' option.
     pub yes_ask: i64,
+    /// Current ask price for the 'Yes' option in dollars.
+    pub yes_ask_dollars: Option<String>,
     /// Current bid price for the 'No' option.
     pub no_bid: i64,
+    /// Current bid price for the 'No' option in dollars.
+    pub no_bid_dollars: Option<String>,
     /// Current ask price for the 'No' option.
     pub no_ask: i64,
+    /// Current ask price for the 'No' option in dollars.
+    pub no_ask_dollars: Option<String>,
     /// Last traded price in the market.
     pub last_price: i64,
+    /// Last traded price in the market in dollars.
+    pub last_price_dollars: Option<String>,
     /// Previous bid price for the 'Yes' option.
     pub previous_yes_bid: i64,
+    /// Previous bid price for the 'Yes' option in dollars.
+    pub previous_yes_bid_dollars: Option<String>,
     /// Previous ask price for the 'Yes' option.
     pub previous_yes_ask: i64,
+    /// Previous ask price for the 'Yes' option in dollars.
+    pub previous_yes_ask_dollars: Option<String>,
     /// Previous traded price in the market.
     pub previous_price: i64,
+    /// Previous traded price in the market in dollars.
+    pub previous_price_dollars: Option<String>,
     /// Total trading volume in the market.
     pub volume: i64,
     /// Trading volume in the last 24 hours.
     pub volume_24h: i64,
     /// Liquidity available in the market.
     pub liquidity: i64,
+    /// Liquidity available in the market in dollars.
+    pub liquidity_dollars: Option<String>,
     /// Open interest in the market.
     pub open_interest: i64,
     /// Result of the market settlement.
-    pub result: SettlementResult,
+    pub result: String,
     /// Cap strike price, if applicable.
     pub cap_strike: Option<f64>,
     /// Indicator if the market can close early.
@@ -473,8 +493,10 @@ pub struct Market {
     pub rules_primary: String,
     /// Secondary rules for the market.
     pub rules_secondary: String,
-    /// Settlement value for the market.
-    pub settlement_value: Option<String>,
+    /// Settlement value for the market in cents (only after determination).
+    pub settlement_value: Option<i64>,
+    /// Settlement value for the market in dollars (only after determination).
+    pub settlement_value_dollars: Option<String>,
     /// Functional strike information, if applicable.
     pub functional_strike: Option<String>,
 }
@@ -544,16 +566,24 @@ pub struct SettlementSource {
 
 /// The order book of a market in the Kalshi exchange.
 ///
-/// This struct includes the bid and ask prices for both 'Yes' and 'No' options in a market, structured as nested vectors.
+/// This struct includes the bid and ask prices for both 'Yes' and 'No' options in a market.
+/// The cents fields are represented as nested integer arrays and the dollars fields
+/// are represented as [string dollars, contract_count] tuples.
 ///
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Orderbook {
-    /// Nested vector of bids and asks for the 'Yes' option.
-    /// Each inner vector typically contains price and quantity.
+    /// Nested vector of bids for the 'Yes' option in cents.
+    /// Each inner vector contains [cents, contract_count].
     pub yes: Option<Vec<Vec<i32>>>,
-    /// Nested vector of bids and asks for the 'No' option.
-    /// Each inner vector typically contains price and quantity.
+    /// Nested vector of bids for the 'No' option in cents.
+    /// Each inner vector contains [cents, contract_count].
     pub no: Option<Vec<Vec<i32>>>,
+    /// Array of price levels representing yes orders in dollars.
+    /// Each entry is [dollars, contract_count] (e.g. ["0.2300", 100]).
+    pub yes_dollars: Option<Vec<(String, i32)>>,
+    /// Array of price levels representing no orders in dollars.
+    /// Each entry is [dollars, contract_count] (e.g. ["0.2300", 100]).
+    pub no_dollars: Option<Vec<(String, i32)>>,
 }
 
 /// Snapshot of market data in the Kalshi exchange.
@@ -590,42 +620,21 @@ pub struct Snapshot {
 pub struct Trade {
     /// Unique identifier of the trade.
     pub trade_id: String,
-    /// Side of the taker in the trade (e.g., 'buyer' or 'seller').
-    pub taker_side: String,
+    /// Side for the taker of this trade.
+    pub taker_side: crate::portfolio::Side,
     /// Ticker of the market in which the trade occurred.
     pub ticker: String,
     /// Number of contracts or shares traded.
     pub count: i32,
-    /// Executed price for the 'Yes' option.
-    pub yes_price: i32,
-    /// Executed price for the 'No' option.
-    pub no_price: i32,
+    /// Executed price for the 'Yes' option (cents).
+    pub yes_price: i64,
+    /// Executed price for the 'No' option (cents).
+    pub no_price: i64,
     /// Time when the trade was created.
     pub created_time: String,
 }
 
-/// Possible outcomes of a market settlement on the Kalshi exchange.
-///
-/// This enum represents the different results that can be assigned to a market
-/// upon its conclusion.
-///
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum SettlementResult {
-    /// The outcome of the market is affirmative.
-    Yes,
-    /// The outcome of the market is negative.
-    No,
-    /// The market is voided, usually due to specific conditions not being met.
-    #[serde(rename = "")]
-    Void,
-    /// All options in the market are settled as 'No'.
-    #[serde(rename = "all_no")]
-    AllNo,
-    /// All options in the market are settled as 'Yes'.
-    #[serde(rename = "all_yes")]
-    AllYes,
-}
+
 
 /// The different statuses a market can have on the Kalshi exchange.
 ///
