@@ -377,6 +377,55 @@ impl Kalshi {
         ))
     }
 
+    /// Convenience helper to retrieve only event-level positions.
+    ///
+    /// Useful for UIs that present event positions separately without tabs.
+    pub async fn get_event_positions(
+        &self,
+        limit: Option<i64>,
+        cursor: Option<String>,
+        count_filter: Option<String>,
+        settlement_status: Option<String>,
+        event_ticker: Option<String>,
+    ) -> Result<(Option<String>, Vec<EventPosition>), KalshiError> {
+        let (next_cursor, event_positions, _market_positions) = self
+            .get_user_positions(
+                limit,
+                cursor,
+                count_filter,
+                settlement_status,
+                None,
+                event_ticker,
+            )
+            .await?;
+        Ok((next_cursor, event_positions))
+    }
+
+    /// Convenience helper to retrieve only market-level positions.
+    ///
+    /// Useful for UIs that present market positions separately without tabs.
+    pub async fn get_market_positions(
+        &self,
+        limit: Option<i64>,
+        cursor: Option<String>,
+        count_filter: Option<String>,
+        settlement_status: Option<String>,
+        ticker: Option<String>,
+        event_ticker: Option<String>,
+    ) -> Result<(Option<String>, Vec<MarketPosition>), KalshiError> {
+        let (next_cursor, _event_positions, market_positions) = self
+            .get_user_positions(
+                limit,
+                cursor,
+                count_filter,
+                settlement_status,
+                ticker,
+                event_ticker,
+            )
+            .await?;
+        Ok((next_cursor, market_positions))
+    }
+
     /// Submits an order to the Kalshi exchange.
     ///
     /// This method allows placing an order in the market, requiring details such as action, count, side,

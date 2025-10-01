@@ -126,6 +126,7 @@ mod http;
 mod kalshi_error;
 mod market;
 mod portfolio;
+mod series;
 #[cfg(feature = "websockets")]
 mod websockets;
 
@@ -140,6 +141,7 @@ use openssl::{
     sign::{RsaPssSaltlen, Signer},
 };
 pub use portfolio::*;
+pub use series::*;
 
 #[cfg(feature = "websockets")]
 pub use websockets::*;

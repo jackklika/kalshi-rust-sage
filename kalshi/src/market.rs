@@ -530,26 +530,57 @@ pub struct Event {
 
 /// Series on the Kalshi exchange.
 ///
-/// This struct includes details about a specific series, such as its frequency,
-/// title, and category. It also includes information on settlement sources and
-/// related contract URLs.
+/// Matches the OpenAPI schema for github.com.Kalshi.exchange-infra.svc-api2.model.Series.
+/// Includes series configuration, fee information, metadata, and settlement sources.
 ///
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Series {
-    /// Unique ticker identifying the series.
-    pub ticker: String,
-    /// Frequency of the series.
-    pub frequency: String,
-    /// Title of the series.
-    pub title: String,
-    /// Category of the series.
+    /// Additional trading prohibitions for this series.
+    pub additional_prohibitions: Vec<String>,
+    /// Category which this series belongs to.
     pub category: String,
-    /// Tags associated with the series.
-    pub tags: Vec<String>,
-    /// Sources used for settling the series.
-    pub settlement_sources: Vec<SettlementSource>,
-    /// URL of the contract related to the series.
+    /// URL to the current terms of the contract underlying the series.
+    pub contract_terms_url: String,
+    /// Direct link to the original filing of the contract which underlies the series.
     pub contract_url: String,
+    /// Floating point multiplier applied to the fee calculations.
+    pub fee_multiplier: f64,
+    /// Series fee structure.
+    pub fee_type: FeeType,
+    /// Human-readable frequency (e.g., weekly, daily, one-off).
+    pub frequency: String,
+    /// Internal product metadata of the series.
+    /// This may be omitted unless requested via include_product_metadata on list endpoints.
+    pub product_metadata: Option<ProductMetadata>,
+    /// Official sources used for the determination of markets within the series.
+    pub settlement_sources: Vec<SettlementSource>,
+    /// Tags related to this series.
+    pub tags: Vec<String>,
+    /// Ticker that identifies this series.
+    pub ticker: String,
+    /// Title describing the series.
+    pub title: String,
+}
+
+/// Fee structure for a Series.
+///
+/// Values correspond to:
+/// - "quadratic" -> Quadratic
+/// - "quadratic_with_maker_fees" -> QuadraticWithMakerFees
+/// - "flat" -> Flat
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FeeType {
+    Quadratic,
+    QuadraticWithMakerFees,
+    Flat,
+}
+
+/// Internal product metadata of the series.
+/// The structure is flexible, modeled as arbitrary JSON under the `key` field.
+#[derive(Debug, Deserialize, Serialize)]
+pub struct ProductMetadata {
+    pub key: serde_json::Value,
 }
 
 /// A source of a settlement in the Kalshi exchange.
