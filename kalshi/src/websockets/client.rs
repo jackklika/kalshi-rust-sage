@@ -116,30 +116,27 @@ impl<'a> KalshiWebsocketClient {
         })
     }
 
-    /// Subscribe to one or more channels on one, more, or all markets (all markets mode not available for orderbook delta)
-    /// You will receive an error if you resubscribe to the same channel/market combinations
+    /// Subscribe to one or more channels using the provided parameters.
+    /// 
+    /// If subscribing to `OrderbookDelta`, a market specification (ticker or tickers) is required.
     ///
     /// # Returns
     ///
     /// Returns a `Result<u32, Box<dyn Error>>` where the unsigned integer is the command id.
-    ///
-    /// ```
-    ///
     pub async fn subscribe(
         &mut self,
-        channels: Vec<KalshiChannel>,
-        market_tickers: Vec<String>,
+        params: KalshiSubscribeCommandParams,
     ) -> Result<u32, Box<dyn Error>> {
         let cmd_id = self.next_cmd_id;
-        if channels.contains(&KalshiChannel::OrderbookDelta) && market_tickers.is_empty() {
-            return Err("Cannot subscribe to orderbook deltas for all market tickers, provide at least one market ticker".to_string().into());
+        if params.channels.contains(&KalshiChannel::OrderbookDelta) 
+            && params.market_ticker.is_none() 
+            && params.market_tickers.as_ref().map_or(true, |v| v.is_empty()) 
+        {
+            return Err("Cannot subscribe to orderbook deltas without providing a market ticker or tickers".to_string().into());
         }
         let msg = KalshiCommand::Subscribe {
             id: cmd_id,
-            params: KalshiSubscribeCommandParams {
-                channels,
-                market_tickers,
-            },
+            params,
         };
         self.to_kalshi.send(msg)?;
         self.next_cmd_id += 1;
@@ -165,29 +162,29 @@ impl<'a> KalshiWebsocketClient {
         Ok(cmd_id)
     }
 
-    /// Add or delete markets on an existing subscription
+    /// Add or delete markets on an existing subscription using the provided parameters.
     ///
     /// # Returns
     ///
     /// Returns a `Result<u32, Box<dyn Error>>` where the unsigned integer is the command id
-    ///
-    /// ```
-    ///
     pub async fn update_subscription(
         &mut self,
-        sid: u32,
-        market_tickers: Vec<String>,
-        action: KalshiUpdateSubscriptionAction,
+        params: KalshiUpdateSubscriptionCommandParams,
     ) -> Result<u32, Box<dyn Error>> {
         let cmd_id = self.next_cmd_id;
         let msg = KalshiCommand::UpdateSubscription {
             id: cmd_id,
-            params: KalshiUpdateSubscriptionCommandParams {
-                market_tickers,
-                action,
-                sids: [sid],
-            },
+            params,
         };
+        self.to_kalshi.send(msg)?;
+        self.next_cmd_id += 1;
+        Ok(cmd_id)
+    }
+
+    /// List all active subscriptions.
+    pub async fn list_subscriptions(&mut self) -> Result<u32, Box<dyn Error>> {
+        let cmd_id = self.next_cmd_id;
+        let msg = KalshiCommand::ListSubscriptions { id: cmd_id };
         self.to_kalshi.send(msg)?;
         self.next_cmd_id += 1;
         Ok(cmd_id)

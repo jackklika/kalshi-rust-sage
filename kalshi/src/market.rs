@@ -3,683 +3,345 @@ use crate::kalshi_error::*;
 use serde::{Deserialize, Serialize};
 
 impl Kalshi {
-    /// Retrieves detailed information about a specific event from the Kalshi exchange.
-    ///
-    /// # Arguments
-    /// * `event_ticker` - A string reference representing the ticker of the event.
-    /// * `with_nested_markets` - An optional boolean to include nested market data.
-    ///
-    /// # Returns
-    /// - `Ok(Event)`: Event object on successful retrieval.
-    /// - `Err(KalshiError)`: Error in case of a failure in the HTTP request or response parsing.
-    /// # Example
-    /// ```
-    /// // Assuming `kalshi_instance` is an already authenticated instance of `Kalshi`
-    /// let event_ticker = "some_event_ticker";
-    /// let event = kalshi_instance.get_single_event(event_ticker, None).await.unwrap();
-    /// ```
-    pub async fn get_single_event(
-        &self,
-        event_ticker: &String,
-        with_nested_markets: Option<bool>,
-    ) -> Result<Event, KalshiError> {
-        let mut params: Vec<(&str, String)> = Vec::with_capacity(2);
-
-        add_param!(params, "with_nested_markets", with_nested_markets);
-
-        let single_event_url = self
-            .build_url_with_params(&format!("/events/{}", event_ticker), params)
-            .unwrap();
-
-        let result: SingleEventResponse = self.http_get(single_event_url).await?;
-
-        Ok(result.event)
+    /// Retrieves information about a single event by its ticker.
+    pub async fn get_single_event(&self, event_ticker: &str) -> Result<Event, KalshiError> {
+        let path = format!("/events/{}", event_ticker);
+        let url = self.build_url(&path)?;
+        let resp: SingleEventResponse = self.http_get(url).await?;
+        Ok(resp.event)
     }
 
-    /// Retrieves detailed information about a specific market from the Kalshi exchange.
-    ///
-    /// # Arguments
-    /// * `ticker` - A string reference representing the ticker of the market.
-    ///
-    /// # Returns
-    /// - `Ok(Market)`: Market object on successful retrieval.
-    /// - `Err(KalshiError)`: Error in case of a failure in the HTTP request or response parsing.
-    /// # Example
-    /// ```
-    /// // Assuming `kalshi_instance` is an already authenticated instance of `Kalshi`
-    /// let market_ticker = "some_event_ticker";
-    /// let market = kalshi_instance.get_single_event(market_ticker).await.unwrap();
-    /// ```
-    pub async fn get_single_market(&self, ticker: &String) -> Result<Market, KalshiError> {
-        let single_market_url = self.build_url(&format!("/markets/{}", ticker))?;
-
-        let result: SingleMarketResponse = self.http_get(single_market_url).await?;
-
-        Ok(result.market)
+    /// Retrieves information about a single market by its ticker.
+    pub async fn get_single_market(&self, market_ticker: &str) -> Result<Market, KalshiError> {
+        let path = format!("/markets/{}", market_ticker);
+        let url = self.build_url(&path)?;
+        let resp: SingleMarketResponse = self.http_get(url).await?;
+        Ok(resp.market)
     }
-    /// Asynchronously retrieves information about multiple markets from the Kalshi exchange.
-    ///
-    /// This method fetches data for a collection of markets, filtered by various optional parameters.
-    /// It supports pagination, time-based filtering, and selection by specific tickers or statuses.
-    ///
-    /// # Arguments
-    /// * `limit` - An optional integer to limit the number of markets returned.
-    /// * `cursor` - An optional string for pagination cursor.
-    /// * `event_ticker` - An optional string to filter markets by event ticker.
-    /// * `series_ticker` - An optional string to filter markets by series ticker.
-    /// * `max_close_ts` - An optional timestamp for the maximum close time.
-    /// * `min_close_ts` - An optional timestamp for the minimum close time.
-    /// * `status` - An optional string to filter markets by their status.
-    /// * `tickers` - An optional string to filter markets by specific tickers.
-    ///
-    /// # Returns
-    /// - `Ok((Option<String>, Vec<Market>))`: A tuple containing an optional pagination cursor and a vector of `Market` objects on success.
-    /// - `Err(KalshiError)`: Error in case of a failure in the HTTP request or response parsing.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// // Assuming `kalshi_instance` is an already authenticated instance of `Kalshi`
-    /// let markets_result = kalshi_instance.get_multiple_markets(
-    ///     Some(10),
-    ///     None,
-    ///     Some("event_ticker"),
-    ///     None,
-    ///     None,
-    ///     None,
-    ///     None,
-    ///     None
-    /// ).await.unwrap();
-    /// ```
+
+    /// Retrieves multiple markets with various filters.
     pub async fn get_multiple_markets(
         &self,
         limit: Option<i64>,
         cursor: Option<String>,
-        event_ticker: Option<String>,
+        status: Option<String>,
         series_ticker: Option<String>,
+        event_ticker: Option<String>,
         max_close_ts: Option<i64>,
         min_close_ts: Option<i64>,
-        status: Option<String>,
         tickers: Option<String>,
-    ) -> Result<(Option<String>, Vec<Market>), KalshiError> {
-        let mut params: Vec<(&str, String)> = Vec::with_capacity(10);
-
+    ) -> Result<(Vec<Market>, Option<String>), KalshiError> {
+        let mut params = Vec::new();
         add_param!(params, "limit", limit);
-        add_param!(params, "event_ticker", event_ticker);
-        add_param!(params, "series_ticker", series_ticker);
-        add_param!(params, "status", status);
         add_param!(params, "cursor", cursor);
-        add_param!(params, "min_close_ts", min_close_ts);
+        add_param!(params, "status", status);
+        add_param!(params, "series_ticker", series_ticker);
+        add_param!(params, "event_ticker", event_ticker);
         add_param!(params, "max_close_ts", max_close_ts);
+        add_param!(params, "min_close_ts", min_close_ts);
         add_param!(params, "tickers", tickers);
 
-        let markets_url = self.build_url_with_params("/markets", params).unwrap();
-
-        let result: PublicMarketsResponse = self.http_get(markets_url).await?;
-
-        Ok((result.cursor, result.markets))
+        let url = self.build_url_with_params("/markets", params)?;
+        let resp: PublicMarketsResponse = self.http_get(url).await?;
+        Ok((resp.markets, resp.cursor))
     }
-    /// Asynchronously retrieves information about multiple events from the Kalshi exchange.
-    ///
-    /// This method fetches data for multiple events, with optional filtering based on status,
-    /// series ticker, and whether nested market data should be included. It supports pagination
-    /// and time-based filtering.
-    ///
-    /// # Arguments
-    /// * `limit` - An optional integer to limit the number of events returned.
-    /// * `cursor` - An optional string for pagination cursor.
-    /// * `status` - An optional string to filter events by their status.
-    /// * `series_ticker` - An optional string to filter events by series ticker.
-    /// * `with_nested_markets` - An optional boolean to include nested market data.
-    ///
-    /// # Returns
-    /// - `Ok((Option<String>, Vec<Event>))`: A tuple containing an optional pagination cursor and a vector of `Event` objects on success.
-    /// - `Err(KalshiError)`: Error in case of a failure in the HTTP request or response parsing.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// // Assuming `kalshi_instance` is an already authenticated instance of `Kalshi`
-    /// let events_result = kalshi_instance.get_multiple_events(
-    ///     Some(10),
-    ///     None,
-    ///     Some("active"),
-    ///     None,
-    ///     Some(true)
-    /// ).await.unwrap();
-    /// tracing::debug!("Events: {:?}", events_result);
-    /// ```
-    ///
+
+    /// Retrieves multiple events with various filters.
     pub async fn get_multiple_events(
         &self,
         limit: Option<i64>,
         cursor: Option<String>,
         status: Option<String>,
         series_ticker: Option<String>,
-        with_nested_markets: Option<bool>,
-    ) -> Result<(Option<String>, Vec<Event>), KalshiError> {
-        let mut params: Vec<(&str, String)> = Vec::with_capacity(6);
-
+    ) -> Result<(Vec<Event>, Option<String>), KalshiError> {
+        let mut params = Vec::new();
         add_param!(params, "limit", limit);
-        add_param!(params, "status", status);
         add_param!(params, "cursor", cursor);
+        add_param!(params, "status", status);
         add_param!(params, "series_ticker", series_ticker);
-        add_param!(params, "with_nested_markets", with_nested_markets);
 
-        let events_url = self.build_url_with_params("/events", params).unwrap();
-
-        let result: PublicEventsResponse = self.http_get(events_url).await?;
-
-        Ok((result.cursor, result.events))
+        let url = self.build_url_with_params("/events", params)?;
+        let resp: PublicEventsResponse = self.http_get(url).await?;
+        Ok((resp.events, resp.cursor))
     }
-    /// Asynchronously retrieves detailed information about a specific series from the Kalshi exchange.
-    ///
-    /// This method fetches data for a series identified by its ticker. The series data includes
-    /// information such as frequency, title, category, settlement sources, and related contract URLs.
-    ///
-    /// # Arguments
-    /// * `ticker` - A reference to a string representing the series's ticker.
-    ///
-    /// # Returns
-    /// - `Ok(Series)`: `Series` object on successful retrieval.
-    /// - `Err(KalshiError)`: Error in case of a failure in the HTTP request or response parsing.
-    /// # Example
-    /// ```
-    /// // Assuming `kalshi_instance` is an already authenticated instance of `Kalshi`
-    /// let series_ticker = "some_series_ticker";
-    /// let series = kalshi_instance.get_series(series_ticker).await.unwrap();
-    /// ```
-    pub async fn get_series(&self, ticker: &String) -> Result<Series, KalshiError> {
-        let series_url = self.build_url(&format!("/series/{}", ticker))?;
 
-        let result: SeriesResponse = self.http_get(series_url).await?;
-
-        Ok(result.series)
+    /// Retrieves series information by ticker.
+    pub async fn get_series(&self, series_ticker: &str) -> Result<Series, KalshiError> {
+        let path = format!("/series/{}", series_ticker);
+        let url = self.build_url(&path)?;
+        let resp: SeriesResponse = self.http_get(url).await?;
+        Ok(resp.series)
     }
-    /// Asynchronously retrieves the order book for a specific market in the Kalshi exchange.
-    ///
-    /// This method fetches the order book for a market, which includes the bid and ask prices
-    /// for both 'Yes' and 'No' options. It allows specifying the depth of the order book to be retrieved.
-    ///
-    /// # Arguments
-    /// * `ticker` - A reference to a string representing the market's ticker.
-    /// * `depth` - An optional integer specifying the depth of the order book.
-    ///
-    /// # Returns
-    /// - `Ok(Orderbook)`: `Orderbook` object on successful retrieval.
-    /// - `Err(KalshiError)`: Error in case of a failure in the HTTP request or response parsing.
-    ///
-    /// # Example
-    /// Returns an orderbook with a depth of 10 entries for some market.
-    /// ```
-    /// // Assuming `kalshi_instance` is an already authenticated instance of `Kalshi`
-    /// let market_ticker = "some_market_ticker";
-    /// let orderbook = kalshi_instance.get_market_orderbook(market_ticker, Some(10)).await.unwrap();
-    /// ```
-    pub async fn get_market_orderbook(
-        &self,
-        ticker: &String,
-        depth: Option<i32>,
-    ) -> Result<Orderbook, KalshiError> {
-        let path = &format!("/markets/{}/orderbook", ticker);
 
-        let mut params: Vec<(&str, String)> = Vec::new();
+    /// Retrieves the orderbook for a specific market.
+    pub async fn get_market_orderbook(&self, market_ticker: &str, depth: Option<i32>) -> Result<Orderbook, KalshiError> {
+        let path = format!("/markets/{}/orderbook", market_ticker);
+        let mut params = Vec::new();
         add_param!(params, "depth", depth);
-
-        let orderbook_url = self.build_url_with_params(path, params)?;
-
-        let result: OrderBookResponse = self.http_get(orderbook_url).await?;
-
-        Ok(result.orderbook)
+        let url = self.build_url_with_params(&path, params)?;
+        let resp: OrderBookResponse = self.http_get(url).await?;
+        Ok(resp.orderbook)
     }
 
-    /// Asynchronously retrieves the market history for a given market on the Kalshi exchange.
-    ///
-    /// This method fetches historical data for a specific market, which can include
-    /// details like prices, bids, asks, volume, and open interest over time. It allows
-    /// filtering the history based on time and pagination parameters.
-    ///
-    /// # Arguments
-    /// * `ticker` - A reference to a string representing the market's ticker.
-    /// * `limit` - An optional integer to limit the number of history records returned.
-    /// * `cursor` - An optional string for pagination cursor.
-    /// * `min_ts` - An optional timestamp to specify the minimum time for history records.
-    /// * `max_ts` - An optional timestamp to specify the maximum time for history records.
-    ///
-    /// # Returns
-    /// - `Ok((Option<String>, Vec<Snapshot>))`: A tuple containing an optional pagination cursor and a vector of `Snapshot` objects on success.
-    /// - `Err(KalshiError)`: Error in case of a failure in the HTTP request or response parsing.
-    /// # Example
-    ///
-    /// ```
-    /// // Assuming `kalshi_instance` is an already authenticated instance of `Kalshi`
-    /// let market_history = kalshi_instance.get_market_history(
-    ///     "ticker_name",
-    ///     Some(10),
-    ///     None,
-    ///     None,
-    ///     None
-    /// ).await.unwrap();
-    /// ```
+    /// Retrieves market price history (candlesticks).
     pub async fn get_market_history(
         &self,
-        ticker: &String,
-        limit: Option<i32>,
-        cursor: Option<String>,
-        min_ts: Option<i64>,
-        max_ts: Option<i64>,
-    ) -> Result<(Option<String>, Vec<Snapshot>), KalshiError> {
-        let mut params: Vec<(&str, String)> = Vec::with_capacity(5);
-
+        market_ticker: &str,
+        start_ts: Option<i64>,
+        end_ts: Option<i64>,
+        limit: Option<i64>,
+    ) -> Result<(String, Vec<Snapshot>), KalshiError> {
+        let path = format!("/markets/{}/history", market_ticker);
+        let mut params = Vec::new();
+        add_param!(params, "start_ts", start_ts);
+        add_param!(params, "end_ts", end_ts);
         add_param!(params, "limit", limit);
-        add_param!(params, "cursor", cursor);
-        add_param!(params, "min_ts", min_ts);
-        add_param!(params, "max_ts", max_ts);
 
-        let market_history_url = self
-            .build_url_with_params(&format!("/markets/{}/history", ticker), params)
-            .unwrap();
-
-        let result: MarketHistoryResponse = self.http_get(market_history_url).await?;
-
-        Ok((result.cursor, result.history))
+        let url = self.build_url_with_params(&path, params)?;
+        let resp: MarketHistoryResponse = self.http_get(url).await?;
+        Ok((resp.ticker, resp.history))
     }
 
-    /// Asynchronously retrieves trade data from the Kalshi exchange.
-    ///
-    /// This method fetches data about trades that have occurred, including details like trade ID,
-    /// taker side, ticker, and executed prices. It supports filtering based on various parameters
-    /// such as time, ticker, and pagination options.
-    ///
-    /// # Arguments
-    /// * `cursor` - An optional string for pagination cursor.
-    /// * `limit` - An optional integer to limit the number of trades returned.
-    /// * `ticker` - An optional string representing the market's ticker for which trades are to be fetched.
-    /// * `min_ts` - An optional timestamp to specify the minimum time for trade records.
-    /// * `max_ts` - An optional timestamp to specify the maximum time for trade records.
-    ///
-    /// # Returns
-    /// - `Ok((Option<String>, Vec<Trade>))`: A tuple containing an optional pagination cursor and a vector of `Trade` objects on success.
-    /// - `Err(KalshiError)`: Error in case of a failure in the HTTP request or response parsing.
-    /// ```
-    /// // Assuming `kalshi_instance` is an already authenticated instance of `Kalshi`
-    /// let trades = kalshi_instance.get_trades(
-    ///     None,
-    ///     Some(10),
-    ///     Some("ticker_name"),
-    ///     None,
-    ///     None
-    /// ).await.unwrap();
-    /// ```
+    /// Retrieves public trades for one or more markets.
     pub async fn get_trades(
         &self,
+        tickers: Option<String>,
+        limit: Option<i64>,
         cursor: Option<String>,
-        limit: Option<i32>,
-        ticker: Option<String>,
-        min_ts: Option<i64>,
-        max_ts: Option<i64>,
-    ) -> Result<(Option<String>, Vec<Trade>), KalshiError> {
-        let mut params: Vec<(&str, String)> = Vec::with_capacity(7);
-
+    ) -> Result<(Vec<Trade>, Option<String>), KalshiError> {
+        let mut params = Vec::new();
+        add_param!(params, "tickers", tickers);
         add_param!(params, "limit", limit);
         add_param!(params, "cursor", cursor);
-        add_param!(params, "min_ts", min_ts);
-        add_param!(params, "max_ts", max_ts);
-        add_param!(params, "ticker", ticker);
 
-        let trades_url = self
-            .build_url_with_params("/markets/trades", params)
-            .unwrap();
-
-        let result: PublicTradesResponse = self.http_get(trades_url).await?;
-
-        Ok((result.cursor, result.trades))
+        let url = self.build_url_with_params("/markets/trades", params)?;
+        let resp: PublicTradesResponse = self.http_get(url).await?;
+        Ok((resp.trades, resp.cursor))
     }
 }
 
-// PRIVATE STRUCTS
-// used in get_single_event
-#[derive(Debug, Deserialize, Serialize)]
+// Structs for API responses
+
+#[derive(Debug, Deserialize)]
 struct SingleEventResponse {
-    event: Event,
-    markets: Option<Vec<Market>>,
+    pub event: Event,
 }
 
-// used in get_single_market
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize)]
 struct SingleMarketResponse {
-    market: Market,
+    pub market: Market,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize)]
 struct PublicMarketsResponse {
-    cursor: Option<String>,
-    markets: Vec<Market>,
+    pub cursor: Option<String>,
+    pub markets: Vec<Market>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize)]
 struct PublicEventsResponse {
-    cursor: Option<String>,
-    events: Vec<Event>,
+    pub cursor: Option<String>,
+    pub events: Vec<Event>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize)]
 struct SeriesResponse {
-    series: Series,
+    pub series: Series,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize)]
 struct OrderBookResponse {
-    orderbook: Orderbook,
+    pub orderbook: Orderbook,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize)]
 struct MarketHistoryResponse {
-    cursor: Option<String>,
-    ticker: String,
-    history: Vec<Snapshot>,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-struct PublicTradesResponse {
-    cursor: Option<String>,
-    trades: Vec<Trade>,
-}
-
-// PUBLIC STRUCTS
-
-/// A market in the Kalshi exchange.
-///
-/// Contains detailed information about the market including its ticker,
-/// type, status, and other relevant data.
-///
-#[derive(Debug, Deserialize, Serialize)]
-pub struct Market {
-    /// Unique identifier for the market.
+    pub cursor: Option<String>,
     pub ticker: String,
-    /// Ticker of the associated event.
-    pub event_ticker: String,
-    /// Type of the market.
-    pub market_type: String,
-    /// Title of the market.
-    pub title: String,
-    /// Subtitle of the market.
-    pub subtitle: String,
-    /// Subtitle for the 'Yes' option in the market.
-    pub yes_sub_title: String,
-    /// Subtitle for the 'No' option in the market.
-    pub no_sub_title: String,
-    /// Opening time of the market.
-    pub open_time: String,
-    /// Closing time of the market.
-    pub close_time: String,
-    /// Expected expiration time of the market (optional; forecasted).
-    pub expected_expiration_time: Option<String>,
-    /// Expiration time of the market.
-    pub expiration_time: Option<String>,
-    /// Latest possible expiration time of the market (upper bound).
-    pub latest_expiration_time: String,
-    /// Countdown in seconds to the settlement.
-    pub settlement_timer_seconds: i64,
-    /// Current status of the market.
-    pub status: String,
-    /// Units used for pricing responses.
-    pub response_price_units: String,
-    /// Notional value of the market.
-    pub notional_value: i64,
-    /// Notional value in dollars (fixed-point string like "0.2300").
-    pub notional_value_dollars: Option<String>,
-    /// Minimum price movement in the market.
-    pub tick_size: i64,
-    /// Current bid price for the 'Yes' option.
-    pub yes_bid: i64,
-    /// Current bid price for the 'Yes' option in dollars.
-    pub yes_bid_dollars: Option<String>,
-    /// Current ask price for the 'Yes' option.
-    pub yes_ask: i64,
-    /// Current ask price for the 'Yes' option in dollars.
-    pub yes_ask_dollars: Option<String>,
-    /// Current bid price for the 'No' option.
-    pub no_bid: i64,
-    /// Current bid price for the 'No' option in dollars.
-    pub no_bid_dollars: Option<String>,
-    /// Current ask price for the 'No' option.
-    pub no_ask: i64,
-    /// Current ask price for the 'No' option in dollars.
-    pub no_ask_dollars: Option<String>,
-    /// Last traded price in the market.
-    pub last_price: i64,
-    /// Last traded price in the market in dollars.
-    pub last_price_dollars: Option<String>,
-    /// Previous bid price for the 'Yes' option.
-    pub previous_yes_bid: i64,
-    /// Previous bid price for the 'Yes' option in dollars.
-    pub previous_yes_bid_dollars: Option<String>,
-    /// Previous ask price for the 'Yes' option.
-    pub previous_yes_ask: i64,
-    /// Previous ask price for the 'Yes' option in dollars.
-    pub previous_yes_ask_dollars: Option<String>,
-    /// Previous traded price in the market.
-    pub previous_price: i64,
-    /// Previous traded price in the market in dollars.
-    pub previous_price_dollars: Option<String>,
-    /// Total trading volume in the market.
-    pub volume: i64,
-    /// Trading volume in the last 24 hours.
-    pub volume_24h: i64,
-    /// Liquidity available in the market.
-    pub liquidity: i64,
-    /// Liquidity available in the market in dollars.
-    pub liquidity_dollars: Option<String>,
-    /// Open interest in the market.
-    pub open_interest: i64,
-    /// Result of the market settlement.
-    pub result: String,
-    /// Cap strike price, if applicable.
-    pub cap_strike: Option<f64>,
-    /// Indicator if the market can close early.
-    pub can_close_early: bool,
-    /// Value at expiration.
-    pub expiration_value: String,
-    /// Category of the market.
-    pub category: String,
-    /// Risk limit in cents.
-    pub risk_limit_cents: i64,
-    /// Type of strike, if applicable.
-    pub strike_type: Option<String>,
-    /// Floor strike price, if applicable.
-    pub floor_strike: Option<f64>,
-    /// Primary rules for the market.
-    pub rules_primary: String,
-    /// Secondary rules for the market.
-    pub rules_secondary: String,
-    /// Settlement value for the market in cents (only after determination).
-    pub settlement_value: Option<i64>,
-    /// Settlement value for the market in dollars (only after determination).
-    pub settlement_value_dollars: Option<String>,
-    /// Functional strike information, if applicable.
-    pub functional_strike: Option<String>,
+    pub history: Vec<Snapshot>,
 }
 
-/// An event in the Kalshi exchange.
-///
-/// This struct contains information about a specific event, including its identifier,
-/// title, and other relevant details. It may also include associated markets.
-///
-#[derive(Debug, Deserialize, Serialize)]
-pub struct Event {
-    /// Unique identifier for the event.
+#[derive(Debug, Deserialize)]
+struct PublicTradesResponse {
+    pub cursor: Option<String>,
+    pub trades: Vec<Trade>,
+}
+
+// Data structures
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct Market {
+    pub ticker: String,
     pub event_ticker: String,
-    /// Ticker of the associated series.
-    pub series_ticker: String,
-    /// Subtitle of the event.
-    pub sub_title: String,
-    /// Title of the event.
+    pub market_type: String,
+    #[deprecated]
     pub title: String,
-    /// Indicates if the event's outcomes are mutually exclusive.
+    #[deprecated]
+    pub subtitle: String,
+    pub yes_sub_title: String,
+    pub no_sub_title: String,
+    pub created_time: String,
+    pub updated_time: String,
+    pub open_time: String,
+    pub close_time: String,
+    pub expected_expiration_time: Option<String>,
+    #[deprecated]
+    pub expiration_time: Option<String>,
+    pub latest_expiration_time: String,
+    pub settlement_timer_seconds: i64,
+    pub status: String,
+    #[deprecated]
+    pub response_price_units: String,
+    #[deprecated]
+    pub yes_bid: f64,
+    pub yes_bid_dollars: Option<String>,
+    pub yes_bid_size_fp: Option<String>,
+    #[deprecated]
+    pub yes_ask: f64,
+    pub yes_ask_dollars: Option<String>,
+    pub yes_ask_size_fp: Option<String>,
+    #[deprecated]
+    pub no_bid: f64,
+    pub no_bid_dollars: Option<String>,
+    #[deprecated]
+    pub no_ask: f64,
+    pub no_ask_dollars: Option<String>,
+    #[deprecated]
+    pub last_price: f64,
+    pub last_price_dollars: Option<String>,
+    pub volume: i64,
+    pub volume_fp: Option<String>,
+    pub volume_24h: i64,
+    pub volume_24h_fp: Option<String>,
+    pub result: String,
+    pub can_close_early: bool,
+    pub fractional_trading_enabled: bool,
+    pub open_interest: i64,
+    pub open_interest_fp: Option<String>,
+    #[deprecated]
+    pub notional_value: i64,
+    pub notional_value_dollars: Option<String>,
+    #[deprecated]
+    pub previous_yes_bid: i64,
+    pub previous_yes_bid_dollars: Option<String>,
+    #[deprecated]
+    pub previous_yes_ask: i64,
+    pub previous_yes_ask_dollars: Option<String>,
+    #[deprecated]
+    pub previous_price: i64,
+    pub previous_price_dollars: Option<String>,
+    #[deprecated]
+    pub liquidity: i64,
+    #[deprecated]
+    pub liquidity_dollars: Option<String>,
+    pub settlement_value: Option<i64>,
+    pub settlement_value_dollars: Option<String>,
+    pub settlement_ts: Option<String>,
+    pub expiration_value: String,
+    pub fee_waiver_expiration_time: Option<String>,
+    pub early_close_condition: Option<String>,
+    #[deprecated]
+    pub tick_size: i64,
+    pub strike_type: Option<String>,
+    pub floor_strike: Option<f64>,
+    pub cap_strike: Option<f64>,
+    pub functional_strike: Option<String>,
+    pub custom_strike: Option<serde_json::Value>,
+    pub rules_primary: String,
+    pub rules_secondary: String,
+    pub mve_collection_ticker: Option<String>,
+    pub mve_selected_legs: Option<Vec<MveSelectedLeg>>,
+    pub primary_participant_key: Option<String>,
+    pub price_level_structure: Option<String>,
+    pub price_ranges: Option<Vec<PriceRange>>,
+    pub is_provisional: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct PriceRange {
+    pub start: String,
+    pub end: String,
+    pub step: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct MveSelectedLeg {
+    pub event_ticker: Option<String>,
+    pub market_ticker: Option<String>,
+    pub side: Option<String>,
+    pub yes_settlement_value_dollars: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct Event {
+    pub event_ticker: String,
+    pub series_ticker: String,
+    pub sub_title: String,
+    pub title: String,
     pub mutually_exclusive: bool,
-    /// Category of the event.
     pub category: String,
-    /// Optional list of markets associated with this event.
     pub markets: Option<Vec<Market>>,
-    /// Optional date of the event's occurrence.
     pub strike_date: Option<String>,
-    /// Optional period of the event.
     pub strike_period: Option<String>,
 }
 
-/// Series on the Kalshi exchange.
-///
-/// Matches the OpenAPI schema for github.com.Kalshi.exchange-infra.svc-api2.model.Series.
-/// Includes series configuration, fee information, metadata, and settlement sources.
-///
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Series {
-    /// Additional trading prohibitions for this series.
     pub additional_prohibitions: Vec<String>,
-    /// Category which this series belongs to.
     pub category: String,
-    /// URL to the current terms of the contract underlying the series.
     pub contract_terms_url: String,
-    /// Direct link to the original filing of the contract which underlies the series.
     pub contract_url: String,
-    /// Floating point multiplier applied to the fee calculations.
     pub fee_multiplier: f64,
-    /// Series fee structure.
-    pub fee_type: FeeType,
-    /// Human-readable frequency (e.g., weekly, daily, one-off).
+    pub fee_type: String,
     pub frequency: String,
-    /// Internal product metadata of the series.
-    /// This may be omitted unless requested via include_product_metadata on list endpoints.
-    pub product_metadata: Option<ProductMetadata>,
-    /// Official sources used for the determination of markets within the series.
+    pub product_metadata: Option<serde_json::Value>,
     pub settlement_sources: Vec<SettlementSource>,
-    /// Tags related to this series.
     pub tags: Vec<String>,
-    /// Ticker that identifies this series.
     pub ticker: String,
-    /// Title describing the series.
     pub title: String,
 }
 
-/// Fee structure for a Series.
-///
-/// Values correspond to:
-/// - "quadratic" -> Quadratic
-/// - "quadratic_with_maker_fees" -> QuadraticWithMakerFees
-/// - "flat" -> Flat
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum FeeType {
-    Quadratic,
-    QuadraticWithMakerFees,
-    Flat,
-}
-
-/// Internal product metadata of the series.
-/// The structure is flexible, modeled as arbitrary JSON under the `key` field.
-#[derive(Debug, Deserialize, Serialize)]
-pub struct ProductMetadata {
-    pub key: serde_json::Value,
-}
-
-/// A source of a settlement in the Kalshi exchange.
-///
-/// This struct contains information about a source used for settling a series, including the source's URL and name.
-///
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct SettlementSource {
-    /// URL of the settlement source.
-    pub url: String,
-    /// Name of the settlement source.
-    pub name: String,
+    pub url: Option<String>,
+    pub name: Option<String>,
 }
 
-/// The order book of a market in the Kalshi exchange.
-///
-/// This struct includes the bid and ask prices for both 'Yes' and 'No' options in a market.
-/// The cents fields are represented as nested integer arrays and the dollars fields
-/// are represented as [string dollars, contract_count] tuples.
-///
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Orderbook {
-    /// Nested vector of bids for the 'Yes' option in cents.
-    /// Each inner vector contains [cents, contract_count].
-    pub yes: Option<Vec<Vec<i32>>>,
-    /// Nested vector of bids for the 'No' option in cents.
-    /// Each inner vector contains [cents, contract_count].
-    pub no: Option<Vec<Vec<i32>>>,
-    /// Array of price levels representing yes orders in dollars.
-    /// Each entry is [dollars, contract_count] (e.g. ["0.2300", 100]).
+    pub yes: Option<Vec<(u32, i32)>>,
+    pub no: Option<Vec<(u32, i32)>>,
     pub yes_dollars: Option<Vec<(String, i32)>>,
-    /// Array of price levels representing no orders in dollars.
-    /// Each entry is [dollars, contract_count] (e.g. ["0.2300", 100]).
     pub no_dollars: Option<Vec<(String, i32)>>,
 }
 
-/// Snapshot of market data in the Kalshi exchange.
-///
-/// This struct provides a snapshot of the market at a specific time, including prices, bids, asks, volume, and open interest.
-///
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Snapshot {
-    /// Last traded price for the 'Yes' option.
-    pub yes_price: i32,
-    /// Current highest bid price for the 'Yes' option.
-    pub yes_bid: i32,
-    /// Current lowest ask price for the 'Yes' option.
-    pub yes_ask: i32,
-    /// Current highest bid price for the 'No' option.
-    pub no_bid: i32,
-    /// Current lowest ask price for the 'No' option.
-    pub no_ask: i32,
-    /// Total trading volume at the snapshot time.
-    pub volume: i32,
-    /// Open interest at the snapshot time.
-    pub open_interest: i32,
-    /// Timestamp of the snapshot.
-    pub ts: i64,
+    pub yes_price: u32,
+    pub yes_bid: u32,
+    pub yes_ask: u32,
+    pub no_bid: u32,
+    pub no_ask: u32,
+    pub volume: u32,
+    pub open_interest: u32,
+    pub ts: u64,
 }
 
-/// A trade in the Kalshi exchange.
-///
-/// This struct contains details of an individual trade, including the trade ID, side, ticker, and executed prices.
-///
-/// Used in methods for retrieving user fills and specific trade details.
-///
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Trade {
-    /// Unique identifier of the trade.
     pub trade_id: String,
-    /// Side for the taker of this trade.
-    pub taker_side: crate::portfolio::Side,
-    /// Ticker of the market in which the trade occurred.
+    pub taker_side: String,
     pub ticker: String,
-    /// Number of contracts or shares traded.
-    pub count: i32,
-    /// Executed price for the 'Yes' option (cents).
-    pub yes_price: i64,
-    /// Executed price for the 'No' option (cents).
-    pub no_price: i64,
-    /// Time when the trade was created.
+    pub count: u32,
+    pub yes_price: u32,
+    pub no_price: u32,
     pub created_time: String,
 }
 
-
-
-/// The different statuses a market can have on the Kalshi exchange.
-///
-/// This enum is used to represent the current operational state of a market.
-///
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum MarketStatus {
-    /// The market is open for trading.
     Open,
-
-    /// The market is closed and not currently available for trading.
     Closed,
-
-    /// The market has been settled, and the outcome is determined.
     Settled,
 }

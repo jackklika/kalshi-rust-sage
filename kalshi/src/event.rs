@@ -6,105 +6,72 @@ use serde::{Deserialize, Serialize};
 impl Kalshi {
     /// Retrieves metadata for an event by its ticker.
     ///
-    /// # Arguments
-    /// * `event_ticker` - The ticker of the event.
-    ///
-    /// # Returns
-    /// - `Ok(EventMetadata)`: Event metadata on success.
-    /// - `Err(KalshiError)`: If the request fails or response parsing fails.
-    ///
-    /// # Example
-    /// ```
-    /// /dev/null/example.rs#L1-12
-    /// # async fn example(k: &kalshi::Kalshi) -> Result<(), kalshi::KalshiError> {
-    /// let meta = k.get_event_metadata(&"EVENT-123".to_string()).await?;
-    /// tracing::debug!("Event image: {:?}", meta.image_url);
-    /// # Ok(())
-    /// # }
-    /// ```
+    /// Maps to GET /events/{event_ticker}/metadata
     pub async fn get_event_metadata(
         &self,
-        event_ticker: &String,
+        event_ticker: &str,
     ) -> Result<EventMetadata, KalshiError> {
         let path = format!("/events/{}/metadata", event_ticker);
-        let url = self.build_url_with_params(&path, Vec::new())?;
+        let url = self.build_url(&path)?;
         let result: EventMetadata = self.http_get(url).await?;
         Ok(result)
     }
 
     /// Retrieves aggregated candlestick data across all markets in an event.
     ///
-    /// # Arguments
-    /// * `event_ticker` - The ticker of the event.
-    ///
-    /// # Returns
-    /// - `Ok(EventCandlesticks)`: Aggregated candlestick data by market.
-    /// - `Err(KalshiError)`: If the request fails or response parsing fails.
-    ///
-    /// # Example
-    /// ```
-    /// /dev/null/example.rs#L1-12
-    /// # async fn example(k: &kalshi::Kalshi) -> Result<(), kalshi::KalshiError> {
-    /// let candles = k.get_event_candlesticks(&"EVENT-123".to_string()).await?;
-    /// tracing::debug!("Markets in event: {}", candles.market_tickers.len());
-    /// # Ok(())
-    /// # }
-    /// ```
+    /// Maps to GET /events/{event_ticker}/candlesticks
     pub async fn get_event_candlesticks(
         &self,
-        event_ticker: &String,
+        event_ticker: &str,
     ) -> Result<EventCandlesticks, KalshiError> {
         let path = format!("/events/{}/candlesticks", event_ticker);
-        let url = self.build_url_with_params(&path, Vec::new())?;
+        let url = self.build_url(&path)?;
         let result: EventCandlesticks = self.http_get(url).await?;
         Ok(result)
     }
 
     /// Retrieves historical raw and formatted forecast percentiles for an event.
     ///
-    /// Data is cached (slightly lagged).
-    ///
-    /// # Arguments
-    /// * `event_ticker` - The ticker of the event.
-    ///
-    /// # Returns
-    /// - `Ok(Vec<ForecastPercentilesSeries>)`: Forecast percentiles history.
-    /// - `Err(KalshiError)`: If the request fails or response parsing fails.
-    ///
-    /// # Example
-    /// ```
-    /// /dev/null/example.rs#L1-16
-    /// # async fn example(k: &kalshi::Kalshi) -> Result<(), kalshi::KalshiError> {
-    /// let history = k.get_event_forecast_history(&"EVENT-123".to_string()).await?;
-    /// if let Some(first) = history.first() {
-    ///   tracing::debug!("Interval: {} minutes, pts: {}", first.period_interval, first.percentile_points.len());
-    /// }
-    /// # Ok(())
-    /// # }
-    /// ```
+    /// Maps to GET /series/{series_ticker}/events/{ticker}/forecast_percentile_history
     pub async fn get_event_forecast_history(
         &self,
-        event_ticker: &String,
+        series_ticker: &str,
+        event_ticker: &str,
+        percentiles: Vec<i32>,
+        start_ts: Option<i64>,
+        end_ts: Option<i64>,
+        period_interval: Option<i32>,
     ) -> Result<Vec<ForecastPercentilesSeries>, KalshiError> {
-        let path = format!("/cached/events/{}/forecast_history", event_ticker);
-        let url = self.build_url_with_params(&path, Vec::new())?;
+        let path = format!(
+            "/series/{}/events/{}/forecast_percentile_history",
+            series_ticker, event_ticker
+        );
+        let mut params = Vec::new();
+        
+        // Percentiles are sent as multiple query params with the same name 'percentiles'
+        for p in percentiles {
+            params.push(("percentiles", p.to_string()));
+        }
+        add_param!(params, "start_ts", start_ts);
+        add_param!(params, "end_ts", end_ts);
+        add_param!(params, "period_interval", period_interval);
+
+        let url = self.build_url_with_params(&path, params)?;
         let result: ForecastHistoryResponse = self.http_get(url).await?;
         Ok(result.forecast_history)
     }
 
     /// Retrieves all markets for an event by ticker.
     ///
-    /// This uses GET /events/{event_ticker} with with_nested_markets=false to return
-    /// the markets as a top-level field, then extracts and returns them.
+    /// Maps to GET /events/{event_ticker}
     pub async fn get_event_markets(
         &self,
-        event_ticker: &String,
+        event_ticker: &str,
+        with_nested_markets: bool,
     ) -> Result<Vec<crate::Market>, KalshiError> {
         let path = format!("/events/{}", event_ticker);
-
-        let mut params: Vec<(&str, String)> = Vec::new();
-        // Ensure markets are returned top-level, not nested inside the event object
-        add_param!(params, "with_nested_markets", Some(false));
+        let mut params = Vec::new();
+        add_param!(params, "with_nested_markets", Some(with_nested_markets));
 
         let url = self.build_url_with_params(&path, params)?;
         let result: EventWithMarketsResponse = self.http_get(url).await?;
@@ -116,80 +83,79 @@ impl Kalshi {
 
 #[derive(Debug, Deserialize, Serialize)]
 struct ForecastHistoryResponse {
+    #[serde(rename = "forecast_history")]
     pub forecast_history: Vec<ForecastPercentilesSeries>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 struct EventWithMarketsResponse {
-    markets: Vec<crate::Market>,
+    pub markets: Vec<crate::Market>,
 }
 
 // PUBLIC STRUCTS
 
 /// Event metadata, including competition, images, and settlement sources.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct EventMetadata {
-    /// Competition identifier (if applicable).
+    pub image_url: String,
+    pub featured_image_url: Option<String>,
+    pub market_details: Option<Vec<MarketMetadata>>,
+    pub settlement_sources: Vec<SettlementSource>,
     pub competition: Option<String>,
-    /// Scope of competition (if applicable).
     pub competition_scope: Option<String>,
-    /// Image URL for the event.
-    pub image_url: Option<String>,
-    /// Official settlement sources for the event.
-    pub settlement_sources: Option<Vec<SettlementSource>>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct MarketMetadata {
+    pub market_ticker: String,
+    pub image_url: String,
+    pub color_code: String,
 }
 
 /// Aggregated candlestick data across all markets in an event.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct EventCandlesticks {
-    /// Adjusted end timestamp if the requested range exceeds internal limits.
-    pub adjusted_end_ts: Option<i64>,
-    /// For each market in `market_tickers`, a list of candlesticks for that market.
-    pub market_candlesticks: Vec<Vec<MarketCandlestick>>,
-    /// List of market tickers in the event, aligned with `market_candlesticks`.
     pub market_tickers: Vec<String>,
+    pub market_candlesticks: Vec<Vec<MarketCandlestick>>,
+    pub adjusted_end_ts: Option<i64>,
 }
 
 /// A single candlestick entry for a given market and period.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct MarketCandlestick {
-    /// Inclusive end of the candlestick period (Unix seconds).
     pub end_period_ts: i64,
-    /// Open interest at the end of the period.
-    pub open_interest: i64,
-    /// OHLC and related stats for traded YES prices during the period.
-    pub price: PriceDistribution,
-    /// Number of contracts bought during the period.
-    pub volume: i64,
-    /// OHLC data for YES sell offers during the period.
-    pub yes_ask: BidAskDistribution,
-    /// OHLC data for YES buy offers during the period.
     pub yes_bid: BidAskDistribution,
+    pub yes_ask: BidAskDistribution,
+    pub price: PriceDistribution,
+    pub volume: i64,
+    pub volume_fp: String,
+    pub open_interest: i64,
+    pub open_interest_fp: String,
 }
 
 /// OHLC for bid/ask distributions.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct BidAskDistribution {
     pub open: i64,
-    pub open_dollars: Option<String>,
-    pub high: i64,
-    pub high_dollars: Option<String>,
+    pub open_dollars: String,
     pub low: i64,
-    pub low_dollars: Option<String>,
+    pub low_dollars: String,
+    pub high: i64,
+    pub high_dollars: String,
     pub close: i64,
-    pub close_dollars: Option<String>,
+    pub close_dollars: String,
 }
 
 /// OHLC and additional stats for traded YES prices during the period.
 /// Values may be missing if there was no trade.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PriceDistribution {
     pub open: Option<i64>,
     pub open_dollars: Option<String>,
-    pub high: Option<i64>,
-    pub high_dollars: Option<String>,
     pub low: Option<i64>,
     pub low_dollars: Option<String>,
+    pub high: Option<i64>,
+    pub high_dollars: Option<String>,
     pub close: Option<i64>,
     pub close_dollars: Option<String>,
     pub mean: Option<i64>,
@@ -199,27 +165,19 @@ pub struct PriceDistribution {
 }
 
 /// A single forecast history series entry for an event.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ForecastPercentilesSeries {
-    /// Inclusive end of the period window.
-    pub end_period_ts: i64,
-    /// Event ticker.
     pub event_ticker: String,
-    /// Percentile points for this period.
+    pub end_period_ts: i64,
+    pub period_interval: i32,
     pub percentile_points: Vec<PercentilePoint>,
-    /// Period length in minutes.
-    pub period_interval: i64,
 }
 
 /// A single percentile point in the forecast distribution.
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PercentilePoint {
-    /// Human-friendly formatted forecast (e.g. "2.4%").
+    pub percentile: i32,
+    pub raw_numerical_forecast: f64,
+    pub numerical_forecast: f64,
     pub formatted_forecast: String,
-    /// Numerical forecast value.
-    pub numerical_forecast: Option<serde_json::Value>,
-    /// Percentile index (e.g. 5, 50, 95).
-    pub percentile: i64,
-    /// Raw numerical forecast value.
-    pub raw_numerical_forecast: Option<serde_json::Value>,
 }

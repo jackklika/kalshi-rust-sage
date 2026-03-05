@@ -18,6 +18,9 @@ pub enum KalshiChannel {
     MarketLifecycleV2,
     MarketPositions,
     Multivariate,
+    Communications,
+    OrderGroupUpdates,
+    UserOrders,
 }
 
 impl KalshiChannel {
@@ -31,6 +34,9 @@ impl KalshiChannel {
             KalshiChannel::MarketLifecycleV2 => "market_lifecycle_v2",
             KalshiChannel::MarketPositions => "market_positions",
             KalshiChannel::Multivariate => "multivariate",
+            KalshiChannel::Communications => "communications",
+            KalshiChannel::OrderGroupUpdates => "order_group_updates",
+            KalshiChannel::UserOrders => "user_orders",
         }
     }
 }

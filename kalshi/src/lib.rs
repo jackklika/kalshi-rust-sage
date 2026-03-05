@@ -119,21 +119,29 @@ use std::{fmt::Debug, sync::Arc};
 
 #[macro_use]
 mod utils;
+mod api_keys;
 mod auth;
+mod communications;
 mod event;
 mod exchange;
+mod historical;
 mod http;
 mod kalshi_error;
 mod market;
+mod multivariate;
 mod portfolio;
 mod series;
 #[cfg(feature = "websockets")]
 mod websockets;
 
+pub use api_keys::*;
+pub use communications::*;
 pub use event::*;
 pub use exchange::*;
+pub use historical::*;
 pub use kalshi_error::*;
 pub use market::*;
+pub use multivariate::*;
 use openssl::{
     hash::MessageDigest,
     pkey::{PKey, Private},

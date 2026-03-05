@@ -79,6 +79,24 @@ impl Kalshi {
         self.process_response::<T>("POST", &url, Some(req_body_string), resp)
             .await
     }
+    pub async fn http_put<B, T>(&self, url: Url, body: &B) -> Result<T, KalshiError>
+    where
+        B: Serialize + ?Sized,
+        T: DeserializeOwned,
+    {
+        let resp = self
+            .client
+            .put(url.clone())
+            .headers(self.auth_headers(url.path(), Method::PUT))
+            .json(body)
+            .send()
+            .await?;
+
+        let req_body_string =
+            serde_json::to_string(body).unwrap_or_else(|_| "<unserializable body>".to_string());
+        self.process_response::<T>("PUT", &url, Some(req_body_string), resp)
+            .await
+    }
     pub async fn http_delete<T: DeserializeOwned>(&self, url: Url) -> Result<T, KalshiError> {
         let resp = self
             .client
@@ -88,6 +106,25 @@ impl Kalshi {
             .await?;
 
         self.process_response::<T>("DELETE", &url, None, resp).await
+    }
+
+    pub async fn http_delete_with_body<B, T>(&self, url: Url, body: &B) -> Result<T, KalshiError>
+    where
+        B: Serialize + ?Sized,
+        T: DeserializeOwned,
+    {
+        let resp = self
+            .client
+            .delete(url.clone())
+            .headers(self.auth_headers(url.path(), Method::DELETE))
+            .json(body)
+            .send()
+            .await?;
+
+        let req_body_string =
+            serde_json::to_string(body).unwrap_or_else(|_| "<unserializable body>".to_string());
+        self.process_response::<T>("DELETE", &url, Some(req_body_string), resp)
+            .await
     }
 
     // Internal: process an HTTP response with debug/info logging and JSON deserialization.

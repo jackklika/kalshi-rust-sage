@@ -1,955 +1,484 @@
 use super::Kalshi;
 use crate::kalshi_error::*;
+use serde::{Deserialize, Serialize};
 use std::fmt;
-use std::sync::Arc;
-use tokio::task;
-use uuid::Uuid;
-
-use serde::{Deserialize, Deserializer, Serialize};
 
 impl Kalshi {
-    /// Retrieves the current balance of the authenticated user from the Kalshi exchange.
-    ///
-    /// This method fetches the user's balance, requiring a valid authentication token.
-    /// If the user is not logged in or the token is missing, it returns an error.
-    ///
-    /// # Returns
-    ///
-    /// - `Ok(i64)`: The user's current balance on successful retrieval.
-    /// - `Err(KalshiError)`: An error if the user is not authenticated or if there is an issue with the request.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// // Assuming `kalshi_instance` is an already authenticated instance of `Kalshi`
-    /// let balance = kalshi_instance.get_balance().await.unwrap();
-    /// ```
-    ///
-    pub async fn get_balance(&self) -> Result<i64, KalshiError> {
-        let balance_url = self.build_url("/portfolio/balance")?;
-        let result: BalanceResponse = self.http_get(balance_url).await?;
-        Ok(result.balance)
+    /// Retrieves the balance and portfolio value for the authenticated user.
+    pub async fn get_balance(&self) -> Result<BalanceResponse, KalshiError> {
+        let url = self.build_url("/portfolio/balance")?;
+        self.http_get(url).await
     }
 
-    /// Retrieves a list of orders from the Kalshi exchange based on specified criteria.
-    ///
-    /// This method fetches multiple orders, allowing for filtering by ticker, event ticker, time range,
-    /// status, and pagination. A valid authentication token is required to access this information.
-    /// If the user is not logged in or the token is missing, it returns an error.
-    ///
-    /// # Arguments
-    ///
-    /// * `ticker` - An optional string to filter orders by market ticker.
-    /// * `event_ticker` - An optional string to filter orders by event ticker.
-    /// * `min_ts` - An optional minimum timestamp for order creation time.
-    /// * `max_ts` - An optional maximum timestamp for order creation time.
-    /// * `status` - An optional string to filter orders by their status.
-    /// * `limit` - An optional integer to limit the number of orders returned.
-    /// * `cursor` - An optional string for pagination cursor.
-    ///
-    /// # Returns
-    ///
-    /// - `Ok((Option<String>, Vec<Order>))`: A tuple containing an optional pagination cursor
-    ///   and a vector of `Order` objects on successful retrieval.
-    /// - `Err(KalshiError)`: An error if the user is not authenticated or if there is an issue with the request.
-    ///
-    /// # Example
-    /// Retrieves all possible orders (Will crash, need to limit for a successful request).
-    /// ```
-    /// // Assuming `kalshi_instance` is an already authenticated instance of `Kalshi`
-    /// let orders = kalshi_instance.get_multiple_orders(
-    ///     Some("ticker_name"), None, None, None, None, None, None
-    /// ).await.unwrap();
-    /// ```
-    ///
+    /// Retrieves multiple orders for the authenticated user with optional filters.
     pub async fn get_multiple_orders(
         &self,
         ticker: Option<String>,
         event_ticker: Option<String>,
+        status: Option<String>,
+        limit: Option<i64>,
+        cursor: Option<String>,
         min_ts: Option<i64>,
         max_ts: Option<i64>,
-        status: Option<String>,
-        limit: Option<i32>,
-        cursor: Option<String>,
-    ) -> Result<(Option<String>, Vec<Order>), KalshiError> {
-        let mut params: Vec<(&str, String)> = Vec::with_capacity(7);
-
+    ) -> Result<(Vec<Order>, Option<String>), KalshiError> {
+        let mut params = Vec::new();
         add_param!(params, "ticker", ticker);
+        add_param!(params, "event_ticker", event_ticker);
+        add_param!(params, "status", status);
         add_param!(params, "limit", limit);
         add_param!(params, "cursor", cursor);
         add_param!(params, "min_ts", min_ts);
         add_param!(params, "max_ts", max_ts);
-        add_param!(params, "event_ticker", event_ticker);
-        add_param!(params, "status", status);
 
-        let user_orders_url = self
-            .build_url_with_params("/portfolio/orders", params)
-            .unwrap();
-
-        let result: MultipleOrderResponse = self.http_get(user_orders_url).await?;
-
-        tracing::debug!("Received orders: {:?}", result.orders);
-
-        Ok((result.cursor, result.orders))
+        let url = self.build_url_with_params("/portfolio/orders", params)?;
+        let resp: MultipleOrderResponse = self.http_get(url).await?;
+        Ok((resp.orders, resp.cursor))
     }
 
-    /// Retrieves detailed information about a specific order from the Kalshi exchange.
-    ///
-    /// This method fetches data for a single order identified by its order ID. A valid authentication token
-    /// is required to access this information. If the user is not logged in or the token is missing, it returns an error.
-    ///
-    /// # Arguments
-    ///
-    /// * `order_id` - A reference to a string representing the order's unique identifier.
-    ///
-    /// # Returns
-    ///
-    /// - `Ok(Order)`: Detailed information about the specified order on successful retrieval.
-    /// - `Err(KalshiError)`: An error if the user is not authenticated or if there is an issue with the request.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// // Assuming `kalshi_instance` is an already authenticated instance of `Kalshi`
-    /// let order_id = "some_order_id";
-    /// let order = kalshi_instance.get_single_order(&order_id).await.unwrap();
-    /// ```
-    ///
-    pub async fn get_single_order(&self, order_id: &String) -> Result<Order, KalshiError> {
-        let user_order_url = self.build_url(&format!("/portfolio/orders/{}", order_id))?;
-
-        let result: SingleOrderResponse = self.http_get(user_order_url).await?;
-
-        Ok(result.order)
+    /// Retrieves a single order by its ID.
+    pub async fn get_single_order(&self, order_id: &str) -> Result<Order, KalshiError> {
+        let path = format!("/portfolio/orders/{}", order_id);
+        let url = self.build_url(&path)?;
+        let resp: SingleOrderResponse = self.http_get(url).await?;
+        Ok(resp.order)
     }
 
-    /// Cancels an existing order on the Kalshi exchange.
-    ///
-    /// This method cancels an order specified by its ID. A valid authentication token is
-    /// required to perform this action. If the user is not logged in or the token is missing,
-    /// it returns an error.
-    ///
-    /// # Arguments
-    ///
-    /// * `order_id` - A string slice referencing the ID of the order to be canceled.
-    ///
-    /// # Returns
-    ///
-    /// - `Ok((Order, i32))`: A tuple containing the updated `Order` object after cancellation
-    ///   and an integer indicating the amount by which the order was reduced on successful cancellation.
-    /// - `Err(KalshiError)`: An error if the user is not authenticated or if there is an issue with the request.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// // Assuming `kalshi_instance` is an already authenticated instance of `Kalshi`
-    /// let order_id = "some_order_id";
-    /// let (order, reduced_by) = kalshi_instance.cancel_order(order_id).await.unwrap();
-    /// ```
-    ///
-    pub async fn cancel_order(&self, order_id: &str) -> Result<(Order, i32), KalshiError> {
-        let cancel_order_url = self.build_url(&format!("/portfolio/orders/{}", order_id))?;
-
-        let result: DeleteOrderResponse = self.http_delete(cancel_order_url).await?;
-
-        Ok((result.order, result.reduced_by))
+    /// Cancels a specific order.
+    pub async fn cancel_order(&self, order_id: &str) -> Result<DeleteOrderResponse, KalshiError> {
+        let path = format!("/portfolio/orders/{}", order_id);
+        let url = self.build_url(&path)?;
+        self.http_delete(url).await
     }
-    /// Decreases the size of an existing order on the Kalshi exchange.
-    ///
-    /// This method allows reducing the size of an order either by specifying the amount to reduce
-    /// (`reduce_by`) or setting a new target size (`reduce_to`). A valid authentication token is
-    /// required for this operation. It's important to provide either `reduce_by` or `reduce_to`,
-    /// but not both at the same time.
-    ///
-    /// # Arguments
-    ///
-    /// * `order_id` - A string slice referencing the ID of the order to be decreased.
-    /// * `reduce_by` - An optional integer specifying how much to reduce the order by.
-    /// * `reduce_to` - An optional integer specifying the new size of the order.
-    ///
-    /// # Returns
-    ///
-    /// - `Ok(Order)`: The updated `Order` object after decreasing the size.
-    /// - `Err(KalshiError)`: An error if the user is not authenticated, if both `reduce_by` and `reduce_to` are provided,
-    ///   or if there is an issue with the request.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// // Assuming `kalshi_instance` is an already authenticated instance of `Kalshi`
-    /// let order_id = "some_order_id";
-    /// let decrease_result = kalshi_instance.decrease_order(order_id, Some(5), None).await.unwrap();
-    /// ```
-    ///
+
+    /// Decreases the size of an existing order.
     pub async fn decrease_order(
         &self,
         order_id: &str,
         reduce_by: Option<i32>,
         reduce_to: Option<i32>,
-    ) -> Result<Order, KalshiError> {
-        let decrease_order_url = self.build_url(&format!("/portfolio/orders/{}", order_id))?;
-
-        match (reduce_by, reduce_to) {
-            (Some(_), Some(_)) => {
-                return Err(KalshiError::UserInputError(
-                    "Can only provide reduce_by strict exclusive or reduce_to, can't provide both"
-                        .to_string(),
-                ));
-            }
-            (None, None) => {
-                return Err(KalshiError::UserInputError(
-                    "Must provide either reduce_by exclusive or reduce_to, can't provide neither"
-                        .to_string(),
-                ));
-            }
-            _ => {}
-        }
-
-        let decrease_payload = DecreaseOrderPayload {
-            reduce_by,
-            reduce_to,
-        };
-
-        let result: SingleOrderResponse = self
-            .http_post(decrease_order_url, &decrease_payload)
-            .await?;
-
-        Ok(result.order)
+    ) -> Result<DecreaseOrderResponse, KalshiError> {
+        let path = format!("/portfolio/orders/{}/decrease", order_id);
+        let url = self.build_url(&path)?;
+        let payload = DecreaseOrderPayload { reduce_by, reduce_to };
+        self.http_post(url, &payload).await
     }
 
-    /// Retrieves a list of fills from the Kalshi exchange based on specified criteria.
-    ///
-    /// This method fetches multiple fills, allowing for filtering by ticker, order ID, time range,
-    /// and pagination. A valid authentication token is required to access this information.
-    /// If the user is not logged in or the token is missing, it returns an error.
-    ///
-    /// # Arguments
-    ///
-    /// * `ticker` - An optional string to filter fills by market ticker.
-    /// * `order_id` - An optional string to filter fills by order ID.
-    /// * `min_ts` - An optional minimum timestamp for fill creation time.
-    /// * `max_ts` - An optional maximum timestamp for fill creation time.
-    /// * `limit` - An optional integer to limit the number of fills returned.
-    /// * `cursor` - An optional string for pagination cursor.
-    ///
-    /// # Returns
-    ///
-    /// - `Ok((Option<String>, Vec<Fill>))`: A tuple containing an optional pagination cursor
-    ///   and a vector of `Fill` objects on successful retrieval.
-    /// - `Err(KalshiError)`: An error if the user is not authenticated or if there is an issue with the request.
-    ///
-    /// # Example
-    /// Retrieves all filled orders
-    /// ```
-    /// // Assuming `kalshi_instance` is an already authenticated instance of `Kalshi`
-    /// let fills = kalshi_instance.get_multiple_fills(
-    ///     Some("ticker_name"), None, None, None, None, None
-    /// ).await.unwrap();
-    /// ```
-    ///
+    /// Retrieves multiple fills for the authenticated user.
     pub async fn get_multiple_fills(
         &self,
         ticker: Option<String>,
         order_id: Option<String>,
+        limit: Option<i64>,
+        cursor: Option<String>,
         min_ts: Option<i64>,
         max_ts: Option<i64>,
-        limit: Option<i32>,
-        cursor: Option<String>,
-    ) -> Result<(Option<String>, Vec<Fill>), KalshiError> {
-        let mut params: Vec<(&str, String)> = Vec::with_capacity(7);
-
+    ) -> Result<(Vec<Fill>, Option<String>), KalshiError> {
+        let mut params = Vec::new();
         add_param!(params, "ticker", ticker);
+        add_param!(params, "order_id", order_id);
         add_param!(params, "limit", limit);
         add_param!(params, "cursor", cursor);
         add_param!(params, "min_ts", min_ts);
         add_param!(params, "max_ts", max_ts);
-        add_param!(params, "order_id", order_id);
 
-        let user_fills_url = self
-            .build_url_with_params("/portfolio/fills", params)
-            .unwrap();
-
-        let result: MultipleFillsResponse = self.http_get(user_fills_url).await?;
-
-        Ok((result.cursor, result.fills))
+        let url = self.build_url_with_params("/portfolio/fills", params)?;
+        let resp: MultipleFillsResponse = self.http_get(url).await?;
+        Ok((resp.fills, resp.cursor))
     }
 
-    /// Retrieves a list of portfolio settlements from the Kalshi exchange.
-    ///
-    /// This method fetches settlements in the user's portfolio, with options for pagination using limit and cursor.
-    /// A valid authentication token is required to access this information.
-    /// If the user is not logged in or the token is missing, it returns an error.
-    ///
-    /// # Arguments
-    ///
-    /// * `limit` - An optional integer to limit the number of settlements returned.
-    /// * `cursor` - An optional string for pagination cursor.
-    ///
-    /// # Returns
-    ///
-    /// - `Ok((Option<String>, Vec<Settlement>))`: A tuple containing an optional pagination cursor
-    ///   and a vector of `Settlement` objects on successful retrieval.
-    /// - `Err(KalshiError)`: An error if the user is not authenticated or if there is an issue with the request.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// // Assuming `kalshi_instance` is an already authenticated instance of `Kalshi`
-    /// let settlements = kalshi_instance.get_portfolio_settlements(None, None).await.unwrap();
-    /// ```
-    ///
+    /// Retrieves portfolio settlements.
     pub async fn get_portfolio_settlements(
         &self,
         limit: Option<i64>,
         cursor: Option<String>,
-    ) -> Result<(Option<String>, Vec<Settlement>), KalshiError> {
-        let mut params: Vec<(&str, String)> = Vec::with_capacity(6);
-
+    ) -> Result<(Vec<Settlement>, Option<String>), KalshiError> {
+        let mut params = Vec::new();
         add_param!(params, "limit", limit);
         add_param!(params, "cursor", cursor);
 
-        let settlements_url = self
-            .build_url_with_params("/portfolio/settlements", params)
-            .unwrap();
-
-        let result: PortfolioSettlementResponse = self.http_get(settlements_url).await?;
-
-        Ok((result.cursor, result.settlements))
+        let url = self.build_url_with_params("/portfolio/settlements", params)?;
+        let resp: PortfolioSettlementResponse = self.http_get(url).await?;
+        Ok((resp.settlements, resp.cursor))
     }
 
-    /// Retrieves the user's positions in events and markets from the Kalshi exchange.
-    ///
-    /// This method fetches the user's positions, providing options for filtering by settlement status,
-    /// specific ticker, and event ticker, as well as pagination using limit and cursor. A valid
-    /// authentication token is required to access this information. If the user is not logged in
-    /// or the token is missing, it returns an error.
-    ///
-    /// # Arguments
-    ///
-    /// * `limit` - An optional integer to limit the number of positions returned.
-    /// * `cursor` - An optional string for pagination cursor.
-    /// * `count_filter` - An optional comma-separated list of fields to require non-zero: position,total_traded,resting_order_count.
-    /// * `settlement_status` - An optional string to filter positions by their settlement status.
-    /// * `ticker` - An optional string to filter positions by market ticker.
-    /// * `event_ticker` - An optional string to filter positions by event ticker.
-    ///
-    /// # Returns
-    ///
-    /// - `Ok((Option<String>, Vec<EventPosition>, Vec<MarketPosition>))`: A tuple containing an optional pagination cursor,
-    ///   a vector of `EventPosition` objects, and a vector of `MarketPosition` objects on successful retrieval.
-    /// - `Err(KalshiError)`: An error if the user is not authenticated or if there is an issue with the request.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// // Assuming `kalshi_instance` is an already authenticated instance of `Kalshi`
-    /// let user_positions = kalshi_instance.get_user_positions(None, None, Some("position,total_traded,resting_order_count".to_string()), None, None, None).await.unwrap();
-    /// ```
-    ///
+    /// Retrieves user positions across markets and events.
     pub async fn get_user_positions(
         &self,
         limit: Option<i64>,
         cursor: Option<String>,
-        count_filter: Option<String>,
-        settlement_status: Option<String>,
         ticker: Option<String>,
         event_ticker: Option<String>,
-    ) -> Result<(Option<String>, Vec<EventPosition>, Vec<MarketPosition>), KalshiError> {
-        let positions_url: &str = "/portfolio/positions";
-
-        let mut params: Vec<(&str, String)> = Vec::with_capacity(7);
-
+    ) -> Result<GetPositionsResponse, KalshiError> {
+        let mut params = Vec::new();
         add_param!(params, "limit", limit);
         add_param!(params, "cursor", cursor);
-        add_param!(params, "count_filter", count_filter);
-        add_param!(params, "settlement_status", settlement_status);
         add_param!(params, "ticker", ticker);
         add_param!(params, "event_ticker", event_ticker);
 
-        let positions_url_with_params = self.build_url_with_params(positions_url, params).unwrap();
-
-        let result: GetPositionsResponse = self.http_get(positions_url_with_params).await?;
-
-        Ok((
-            result.cursor,
-            result.event_positions,
-            result.market_positions,
-        ))
+        let url = self.build_url_with_params("/portfolio/positions", params)?;
+        self.http_get(url).await
     }
 
-    /// Convenience helper to retrieve only event-level positions.
-    ///
-    /// Useful for UIs that present event positions separately without tabs.
-    pub async fn get_event_positions(
-        &self,
-        limit: Option<i64>,
-        cursor: Option<String>,
-        count_filter: Option<String>,
-        settlement_status: Option<String>,
-        event_ticker: Option<String>,
-    ) -> Result<(Option<String>, Vec<EventPosition>), KalshiError> {
-        let (next_cursor, event_positions, _market_positions) = self
-            .get_user_positions(
-                limit,
-                cursor,
-                count_filter,
-                settlement_status,
-                None,
-                event_ticker,
-            )
-            .await?;
-        Ok((next_cursor, event_positions))
+    /// Creates a new order.
+    pub async fn create_order(&self, payload: CreateOrderPayload) -> Result<Order, KalshiError> {
+        let url = self.build_url("/portfolio/orders")?;
+        let resp: SingleOrderResponse = self.http_post(url, &payload).await?;
+        Ok(resp.order)
     }
 
-    /// Convenience helper to retrieve only market-level positions.
-    ///
-    /// Useful for UIs that present market positions separately without tabs.
-    pub async fn get_market_positions(
-        &self,
-        limit: Option<i64>,
-        cursor: Option<String>,
-        count_filter: Option<String>,
-        settlement_status: Option<String>,
-        ticker: Option<String>,
-        event_ticker: Option<String>,
-    ) -> Result<(Option<String>, Vec<MarketPosition>), KalshiError> {
-        let (next_cursor, _event_positions, market_positions) = self
-            .get_user_positions(
-                limit,
-                cursor,
-                count_filter,
-                settlement_status,
-                ticker,
-                event_ticker,
-            )
-            .await?;
-        Ok((next_cursor, market_positions))
-    }
-
-    /// Submits an order to the Kalshi exchange.
-    ///
-    /// This method allows placing an order in the market, requiring details such as action, count, side,
-    /// ticker, order type, and other optional parameters. A valid authentication token is
-    /// required for this operation. Note that for limit orders, either `no_price` or `yes_price` must be provided,
-    /// but not both.
-    ///
-    /// # Arguments
-    ///
-    /// * `action` - The action (buy/sell) of the order.
-    /// * `client_order_id` - An optional client-side identifier for the order.
-    /// * `count` - The number of shares or contracts to trade.
-    /// * `side` - The side (Yes/No) of the order.
-    /// * `ticker` - The market ticker the order is placed in.
-    /// * `input_type` - The type of the order (e.g., market, limit).
-    /// * `buy_max_cost` - The maximum cost for a buy order. Optional.
-    /// * `expiration_ts` - The expiration timestamp for the order. Optional.
-    /// * `no_price` - The price for the 'No' option in a limit order. Optional.
-    /// * `sell_position_floor` - The minimum position size to maintain after selling. Optional.
-    /// * `yes_price` - The price for the 'Yes' option in a limit order. Optional.
-    ///
-    /// # Returns
-    ///
-    /// - `Ok(Order)`: The created `Order` object on successful placement.
-    /// - `Err(KalshiError)`: An error if the user is not authenticated, if both `no_price` and `yes_price` are provided for limit orders,
-    ///   or if there is an issue with the request.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// // Assuming `kalshi_instance` is an already authenticated instance of `Kalshi`
-    /// let action = Action::Buy;
-    /// let side = Side::Yes;
-    /// let order = kalshi_instance.create_order(
-    ///     action,
-    ///     None,
-    ///     10,
-    ///     side,
-    ///     "example_ticker",
-    ///     OrderType::Limit,
-    ///     None,
-    ///     None,
-    ///     None,
-    ///     None,
-    ///     Some(100)
-    /// ).await.unwrap();
-    /// ```
-    ///
-
-    // todo: rewrite using generics
-    pub async fn create_order(
-        &self,
-        action: Action,
-        client_order_id: Option<String>,
-        count: i32,
-        side: Side,
-        ticker: String,
-        input_type: OrderType,
-        buy_max_cost: Option<i64>,
-        expiration_ts: Option<i64>,
-        no_price: Option<i64>,
-        sell_position_floor: Option<i32>,
-        yes_price: Option<i64>,
-        time_in_force: Option<TimeInForce>,
-    ) -> Result<Order, KalshiError> {
-        let order_url = self.build_url("/portfolio/orders")?;
-        if let OrderType::Limit = input_type { match (no_price, yes_price) {
-            (Some(_), Some(_)) => {
-                return Err(KalshiError::UserInputError(
-                    "Can only provide no_price exclusive or yes_price, can't provide both"
-                        .to_string(),
-                ));
-            }
-            (None, None) => {
-                return Err(KalshiError::UserInputError(
-                        "Must provide either no_price exclusive or yes_price, can't provide neither"
-                            .to_string(),
-                    ));
-            }
-            _ => {}
-        } }
-
-        let unwrapped_id = match client_order_id {
-            Some(id) => id,
-            _ => String::from(Uuid::new_v4()),
-        };
-
-        let order_payload = CreateOrderPayload {
-            action,
-            client_order_id: unwrapped_id,
-            count,
-            side,
-            ticker,
-            r#type: input_type,
-            buy_max_cost,
-            expiration_ts,
-            no_price,
-            sell_position_floor,
-            yes_price,
-            no_price_dollars: None,
-            yes_price_dollars: None,
-            order_group_id: None,
-            post_only: None,
-            sell_position_capped: None,
-            self_trade_prevention_type: None,
-            time_in_force,
-        };
-
-        let order_resp: SingleOrderResponse = self.http_post(order_url, &order_payload).await?;
-        Ok(order_resp.order)
-    }
-
-    pub async fn batch_cancel_order(
-        &mut self,
-        batch: Vec<String>,
-    ) -> Result<Vec<Result<(Order, i32), KalshiError>>, KalshiError> {
-        let temp_instance = Arc::new(self.clone());
-        let mut futures = Vec::new();
-
-        for order_id in batch {
-            let kalshi_ref = Arc::clone(&temp_instance);
-            let order_id = order_id.clone();
-
-            let future = task::spawn(async move { kalshi_ref.cancel_order(&order_id).await });
-            futures.push(future);
+    /// Batch cancels multiple orders.
+    pub async fn batch_cancel_order(&self, order_ids: Vec<String>) -> Result<Vec<DeleteOrderResponse>, KalshiError> {
+        let url = self.build_url("/portfolio/orders/batched")?;
+        #[derive(Serialize)]
+        struct BatchCancelRequest {
+            orders: Vec<BatchCancelItem>,
         }
-
-        let mut outputs = Vec::new();
-
-        // TODO: improve error process for joining, I don't believe it's specific enough.
-        for future in futures {
-            match future.await {
-                Ok(result) => outputs.push(result),
-                Err(e) => {
-                    return Err(KalshiError::UserInputError(format!(
-                        "Join of concurrent requests failed, check input or message developer: {}",
-                        e
-                    )));
-                }
-            }
+        #[derive(Serialize)]
+        struct BatchCancelItem {
+            order_id: String,
         }
-        Ok(outputs)
+        let payload = BatchCancelRequest {
+            orders: order_ids.into_iter().map(|id| BatchCancelItem { order_id: id }).collect(),
+        };
+        let resp: BatchCancelOrdersResponse = self.http_delete_with_body(url, &payload).await?;
+        Ok(resp.orders.into_iter().map(|o| DeleteOrderResponse {
+            order: o.order,
+            reduced_by: o.reduced_by,
+        }).collect())
     }
 
-    pub async fn batch_create_order(
-        &mut self,
-        batch: Vec<OrderCreationField>,
-    ) -> Result<Vec<Result<(Order, i32), KalshiError>>, KalshiError> {
-        todo!()
+    // Order Group Management
+
+    /// Retrieves all order groups for the user.
+    pub async fn get_order_groups(&self) -> Result<Vec<OrderGroup>, KalshiError> {
+        let url = self.build_url("/portfolio/order_groups")?;
+        let resp: GetOrderGroupsResponse = self.http_get(url).await?;
+        Ok(resp.order_groups)
+    }
+
+    /// Creates a new order group.
+    pub async fn create_order_group(&self, payload: CreateOrderGroupRequest) -> Result<String, KalshiError> {
+        let url = self.build_url("/portfolio/order_groups/create")?;
+        let resp: CreateOrderGroupResponse = self.http_post(url, &payload).await?;
+        Ok(resp.order_group_id)
+    }
+
+    /// Retrieves a single order group by its ID.
+    pub async fn get_order_group(&self, order_group_id: &str) -> Result<GetOrderGroupResponse, KalshiError> {
+        let path = format!("/portfolio/order_groups/{}", order_group_id);
+        let url = self.build_url(&path)?;
+        self.http_get(url).await
+    }
+
+    /// Deletes an order group.
+    pub async fn delete_order_group(&self, order_group_id: &str) -> Result<(), KalshiError> {
+        let path = format!("/portfolio/order_groups/{}", order_group_id);
+        let url = self.build_url(&path)?;
+        self.http_delete(url).await
+    }
+
+    /// Resets an order group.
+    pub async fn reset_order_group(&self, order_group_id: &str) -> Result<(), KalshiError> {
+        let path = format!("/portfolio/order_groups/{}/reset", order_group_id);
+        let url = self.build_url(&path)?;
+        self.http_put(url, &serde_json::json!({})).await
+    }
+
+    /// Triggers an order group.
+    pub async fn trigger_order_group(&self, order_group_id: &str) -> Result<(), KalshiError> {
+        let path = format!("/portfolio/order_groups/{}/trigger", order_group_id);
+        let url = self.build_url(&path)?;
+        self.http_put(url, &serde_json::json!({})).await
+    }
+
+    /// Updates the limit for an order group.
+    pub async fn update_order_group_limit(&self, order_group_id: &str, payload: UpdateOrderGroupLimitRequest) -> Result<(), KalshiError> {
+        let path = format!("/portfolio/order_groups/{}/limit", order_group_id);
+        let url = self.build_url(&path)?;
+        self.http_put(url, &payload).await
+    }
+
+    // Subaccount Management
+
+    /// Creates a new subaccount.
+    pub async fn create_subaccount(&self) -> Result<u32, KalshiError> {
+        let url = self.build_url("/portfolio/subaccounts")?;
+        let resp: CreateSubaccountResponse = self.http_post(url, &serde_json::json!({})).await?;
+        Ok(resp.subaccount_number)
+    }
+
+    /// Transfers funds between subaccounts.
+    pub async fn transfer_between_subaccounts(&self, payload: ApplySubaccountTransferRequest) -> Result<(), KalshiError> {
+        let url = self.build_url("/portfolio/subaccounts/transfer")?;
+        self.http_post(url, &payload).await
+    }
+
+    /// Retrieves balances for all subaccounts.
+    pub async fn get_subaccount_balances(&self) -> Result<Vec<SubaccountBalance>, KalshiError> {
+        let url = self.build_url("/portfolio/subaccounts/balances")?;
+        let resp: GetSubaccountBalancesResponse = self.http_get(url).await?;
+        Ok(resp.subaccount_balances)
+    }
+
+    /// Retrieves transfers between subaccounts.
+    pub async fn get_subaccount_transfers(&self, limit: Option<i64>, cursor: Option<String>) -> Result<(Vec<SubaccountTransfer>, Option<String>), KalshiError> {
+        let mut params = Vec::new();
+        add_param!(params, "limit", limit);
+        add_param!(params, "cursor", cursor);
+        let url = self.build_url_with_params("/portfolio/subaccounts/transfers", params)?;
+        let resp: GetSubaccountTransfersResponse = self.http_get(url).await?;
+        Ok((resp.transfers, resp.cursor))
+    }
+
+    /// Updates netting settings for a subaccount.
+    pub async fn update_subaccount_netting(&self, payload: UpdateSubaccountNettingRequest) -> Result<(), KalshiError> {
+        let url = self.build_url("/portfolio/subaccounts/netting")?;
+        self.http_put(url, &payload).await
+    }
+
+    /// Retrieves netting settings for all subaccounts.
+    pub async fn get_subaccount_netting(&self) -> Result<Vec<SubaccountNettingConfig>, KalshiError> {
+        let url = self.build_url("/portfolio/subaccounts/netting")?;
+        let resp: GetSubaccountNettingResponse = self.http_get(url).await?;
+        Ok(resp.netting_configs)
+    }
+
+    /// Retrieves the total value of resting orders in cents.
+    pub async fn get_total_resting_order_value(&self) -> Result<i64, KalshiError> {
+        let url = self.build_url("/portfolio/summary/total_resting_order_value")?;
+        let resp: GetPortfolioRestingOrderTotalValueResponse = self.http_get(url).await?;
+        Ok(resp.total_resting_order_value)
     }
 }
 
-// PRIVATE STRUCTS
-// used in getbalance method
-#[derive(Debug, Serialize, Deserialize)]
-struct BalanceResponse {
-    balance: i64,
-    updated_ts: Option<i64>,
+// Responses and Payloads
+
+#[derive(Debug, Deserialize)]
+pub struct BalanceResponse {
+    pub balance: i64,
+    pub portfolio_value: i64,
+    pub updated_ts: i64,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize)]
 struct SingleOrderResponse {
-    order: Order,
+    pub order: Order,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize)]
 struct MultipleOrderResponse {
-    orders: Vec<Order>,
-    #[serde(deserialize_with = "empty_string_is_none")]
-    cursor: Option<String>,
+    pub orders: Vec<Order>,
+    pub cursor: Option<String>,
 }
 
-fn empty_string_is_none<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let s = String::deserialize(deserializer)?;
-    if s.is_empty() {
-        Ok(None)
-    } else {
-        Ok(Some(s))
-    }
+#[derive(Debug, Deserialize)]
+pub struct DeleteOrderResponse {
+    pub order: Option<Order>,
+    pub reduced_by: i32,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-struct DeleteOrderResponse {
-    order: Order,
-    reduced_by: i32,
+#[derive(Debug, Deserialize)]
+pub struct DecreaseOrderResponse {
+    pub order: Order,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-struct DecreaseOrderResponse {
-    order: Order,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Serialize)]
 struct DecreaseOrderPayload {
-    reduce_by: Option<i32>,
-    reduce_to: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reduce_by: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reduce_to: Option<i32>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize)]
 struct MultipleFillsResponse {
-    fills: Vec<Fill>,
-    cursor: Option<String>,
+    pub fills: Vec<Fill>,
+    pub cursor: Option<String>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize)]
 struct PortfolioSettlementResponse {
-    cursor: Option<String>,
-    settlements: Vec<Settlement>,
+    pub cursor: Option<String>,
+    pub settlements: Vec<Settlement>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-struct GetPositionsResponse {
-    cursor: Option<String>,
-    event_positions: Vec<EventPosition>,
-    market_positions: Vec<MarketPosition>,
+#[derive(Debug, Deserialize)]
+pub struct GetPositionsResponse {
+    pub cursor: Option<String>,
+    pub event_positions: Vec<EventPosition>,
+    pub market_positions: Vec<MarketPosition>,
 }
 
-#[derive(Debug, Deserialize, Serialize)]
-struct CreateOrderPayload {
-    action: Action,
-    client_order_id: String,
-    count: i32,
-    side: Side,
-    ticker: String,
-    // Keep 'type' to align with existing API usage in this codebase
-    r#type: OrderType,
-    // Optional fields per API docs
-    buy_max_cost: Option<i64>,
-    expiration_ts: Option<i64>,
-    no_price: Option<i64>,
-    sell_position_floor: Option<i32>,
-    yes_price: Option<i64>,
-    // Dollar price variants (fixed-point strings like "0.2300")
-    no_price_dollars: Option<String>,
-    yes_price_dollars: Option<String>,
-    // Order grouping and flags
-    order_group_id: Option<String>,
-    post_only: Option<bool>,
-    sell_position_capped: Option<bool>,
-    self_trade_prevention_type: Option<String>,
-    // Time-in-force policy
-    time_in_force: Option<TimeInForce>,
-}
-
-// PUBLIC STRUCTS
-// -------------------------
-
-/// Represents an order in the Kalshi exchange.
-///
-/// This struct details an individual order, including its identification, status, prices, and various metrics related to its lifecycle.
-///
-#[derive(Debug, Deserialize, Serialize)]
-pub struct Order {
-    /// Unique identifier for the order.
-    pub order_id: String,
-    /// Identifier of the user who placed the order. Optional.
-    pub user_id: Option<String>,
-    /// Ticker of the market associated with the order.
-    pub ticker: String,
-    /// Current status of the order (e.g., resting, executed).
-    pub status: OrderStatus,
-    /// Price of the 'Yes' option in the order (cents).
-    pub yes_price: i64,
-    /// Price of the 'No' option in the order (cents).
-    pub no_price: i64,
-    /// Price of the 'Yes' option in dollars (fixed-point).
-    pub yes_price_dollars: Option<String>,
-    /// Price of the 'No' option in dollars (fixed-point).
-    pub no_price_dollars: Option<String>,
-    /// ISO 8601 Timestamp when the order was created. Optional.
-    pub created_time: Option<String>,
-    /// Total number of filled contracts (maker + taker). Optional.
-    pub fill_count: Option<i32>,
-    /// The initial size of the order (contract units). Optional.
-    pub initial_count: Option<i32>,
-    /// Total cost of taker fills in cents. Optional.
-    pub taker_fill_cost: Option<i64>,
-    /// Fees incurred as a taker in cents. Optional.
-    pub taker_fees: Option<i64>,
-    /// Total cost of maker fills in cents. Optional.
-    pub maker_fill_cost: Option<i64>,
-    /// Fees incurred as a maker in cents. Optional.
-    pub maker_fees: Option<i64>,
-    /// Remaining count of the order. Optional.
-    pub remaining_count: Option<i32>,
-    /// Position of the order in the queue. Optional.
-    pub queue_position: Option<i32>,
-    /// Expiration time of the order. Optional.
-    pub expiration_time: Option<String>,
-    /// The action (buy/sell) of the order.
+#[derive(Debug, Serialize)]
+pub struct CreateOrderPayload {
     pub action: Action,
-    /// The side (Yes/No) of the order.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_order_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub count: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub count_fp: Option<String>,
     pub side: Side,
-    /// Type of the order (e.g., market, limit).
+    pub ticker: String,
     pub r#type: String,
-    /// Last update time of the order. Optional.
-    pub last_update_time: Option<String>,
-    /// Client-side identifier for the order.
-    pub client_order_id: String,
-    /// Group identifier for the order.
-    pub order_group_id: String,
-    /// Self-trade prevention type. Optional.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub buy_max_cost: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub expiration_ts: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub no_price: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub yes_price: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub no_price_dollars: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub yes_price_dollars: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order_group_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub post_only: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub self_trade_prevention_type: Option<String>,
-
-    // Legacy/extra counters maintained for backward compatibility (optional)
-    /// Count of fills where the order acted as a taker. Optional.
-    pub taker_fill_count: Option<i32>,
-    /// Count of order placements. Optional.
-    pub place_count: Option<i32>,
-    /// Count of order decreases. Optional.
-    pub decrease_count: Option<i32>,
-    /// Count of fills where the order acted as a maker. Optional.
-    pub maker_fill_count: Option<i32>,
-    /// Count of FCC (Financial Crime Compliance) cancellations. Optional.
-    pub fcc_cancel_count: Option<i32>,
-    /// Count of cancellations at market close. Optional.
-    pub close_cancel_count: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub time_in_force: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub subaccount: Option<u32>,
 }
 
-/// A completed transaction (a 'fill') in the Kalshi exchange.
-///
-/// This struct details a single fill instance, including the action taken, the quantity,
-/// the involved prices, and the identifiers of the order and trade.
-///
-#[derive(Debug, Deserialize, Serialize)]
-pub struct Fill {
-    /// The action (buy/sell) of the fill.
-    pub action: Action,
-    /// The number of contracts or shares involved in the fill.
-    pub count: i32,
-    /// The timestamp when the fill was created.
-    pub created_time: String,
-    /// Indicates if the fill was made by a taker.
-    pub is_taker: bool,
-    /// The price of the 'No' option in the fill.
-    pub no_price: i64,
-    /// The identifier of the associated order.
+#[derive(Debug, Deserialize)]
+struct BatchCancelOrdersResponse {
+    pub orders: Vec<BatchCancelOrdersIndividualResponse>,
+}
+
+#[derive(Debug, Deserialize)]
+struct BatchCancelOrdersIndividualResponse {
     pub order_id: String,
-    /// The side (Yes/No) of the fill.
+    pub order: Option<Order>,
+    pub reduced_by: i32,
+}
+
+// Core Data Structures
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct Order {
+    pub order_id: String,
+    pub user_id: Option<String>,
+    pub client_order_id: String,
+    pub ticker: String,
     pub side: Side,
-    /// The ticker of the market in which the fill occurred.
-    pub ticker: String,
-    /// The unique identifier of the trade.
-    pub trade_id: String,
-    /// The price of the 'Yes' option in the fill.
+    pub action: Action,
+    pub status: OrderStatus,
     pub yes_price: i64,
+    pub no_price: i64,
+    pub yes_price_dollars: Option<String>,
+    pub no_price_dollars: Option<String>,
+    pub fill_count: i32,
+    pub fill_count_fp: Option<String>,
+    pub remaining_count: i32,
+    pub remaining_count_fp: Option<String>,
+    pub initial_count: i32,
+    pub initial_count_fp: Option<String>,
+    pub taker_fees: i64,
+    pub taker_fees_dollars: Option<String>,
+    pub maker_fees: i64,
+    pub maker_fees_dollars: Option<String>,
+    pub taker_fill_cost: i64,
+    pub taker_fill_cost_dollars: Option<String>,
+    pub maker_fill_cost: i64,
+    pub maker_fill_cost_dollars: Option<String>,
+    pub queue_position: Option<i32>,
+    pub expiration_time: Option<String>,
+    pub created_time: Option<String>,
+    pub last_update_time: Option<String>,
+    pub r#type: String,
+    pub order_group_id: Option<String>,
+    pub self_trade_prevention_type: Option<String>,
+    pub subaccount_number: Option<u32>,
 }
 
-/// A settlement of a market position in the Kalshi exchange.
-///
-/// This struct provides details of a market settlement, including the result, quantities,
-/// costs involved, and the timestamp of settlement.
-///
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct Fill {
+    pub fill_id: String,
+    #[deprecated]
+    pub trade_id: String,
+    pub order_id: String,
+    pub client_order_id: Option<String>,
+    pub ticker: String,
+    pub side: Side,
+    pub action: Action,
+    pub count: i32,
+    pub count_fp: Option<String>,
+    pub yes_price: i64,
+    pub no_price: i64,
+    pub yes_price_fixed: Option<String>,
+    pub no_price_fixed: Option<String>,
+    pub is_taker: bool,
+    pub created_time: String,
+    pub fee_cost: Option<String>,
+    pub subaccount_number: Option<u32>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Settlement {
-    /// The result of the market settlement.
-    pub market_result: String,
-    /// The quantity involved in the 'No' position.
-    pub no_count: i64,
-    /// The total cost associated with the 'No' position (cents).
-    pub no_total_cost: i64,
-    /// The revenue generated from the settlement (cents).
-    pub revenue: i64,
-    /// The timestamp when the settlement occurred.
-    pub settled_time: String,
-    /// The ticker of the market that was settled.
     pub ticker: String,
-    /// Payout of a single YES contract (cents).
-    pub value: i64,
-    /// The quantity involved in the 'Yes' position.
-    pub yes_count: i64,
-    /// The total cost associated with the 'Yes' position (cents).
-    pub yes_total_cost: i64,
-}
-
-/// A user's position in a specific event on the Kalshi exchange.
-///
-/// Details the user's exposure, costs, profits, and the number of resting orders related to a particular event.
-///
-#[derive(Debug, Deserialize, Serialize)]
-pub struct EventPosition {
-    /// The total exposure amount in the event.
-    pub event_exposure: i64,
-    /// The total exposure amount in the event in dollars (fixed-point string).
-    pub event_exposure_dollars: Option<String>,
-    /// The ticker of the event.
     pub event_ticker: String,
-    /// The total fees paid in the event in cents.
-    pub fees_paid: i64,
-    /// The total fees paid in the event in dollars (fixed-point string).
-    pub fees_paid_dollars: Option<String>,
-    /// The realized profit or loss in the event in cents.
-    pub realized_pnl: i64,
-    /// The realized profit or loss in the event in dollars (fixed-point string).
-    pub realized_pnl_dollars: Option<String>,
-    /// The count of resting (active but unfilled) orders in the event.
-    pub resting_order_count: i32,
-    /// The total cost incurred in the event in cents.
-    pub total_cost: i64,
-    /// The total cost incurred in the event in dollars (fixed-point string).
-    pub total_cost_dollars: Option<String>,
-
+    pub market_result: String,
+    pub yes_count: i64,
+    pub yes_count_fp: Option<String>,
+    pub yes_total_cost: i64,
+    pub no_count: i64,
+    pub no_count_fp: Option<String>,
+    pub no_total_cost: i64,
+    pub revenue: i64,
+    pub settled_time: String,
+    pub fee_cost: Option<String>,
+    pub value: Option<i64>,
 }
 
-/// A user's position in a specific market on the Kalshi exchange.
-///
-/// This struct includes details about the user's market position, including exposure, fees,
-/// profits, and the number of resting orders.
-///
-#[derive(Debug, Deserialize, Serialize)]
-pub struct MarketPosition {
-    /// The total fees paid in the market in cents.
-    pub fees_paid: i64,
-    /// The total fees paid in the market in dollars (fixed-point string).
-    pub fees_paid_dollars: Option<String>,
-    /// The total exposure amount in the market.
-    pub market_exposure: i64,
-    /// The total exposure amount in the market in dollars (fixed-point string).
-    pub market_exposure_dollars: Option<String>,
-    /// The current position of the user in the market.
-    pub position: i32,
-    /// The realized profit or loss in the market in cents.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct EventPosition {
+    pub event_ticker: String,
+    pub total_cost: i64,
+    pub total_cost_dollars: Option<String>,
+    pub total_cost_shares: i64,
+    pub total_cost_shares_fp: Option<String>,
+    pub event_exposure: i64,
+    pub event_exposure_dollars: Option<String>,
     pub realized_pnl: i64,
-    /// The realized profit or loss in the market in dollars (fixed-point string).
     pub realized_pnl_dollars: Option<String>,
-    /// The count of resting orders in the market.
-    pub resting_orders_count: i32,
-    /// The ticker of the market.
+    pub fees_paid: i64,
+    pub fees_paid_dollars: Option<String>,
+    pub resting_order_count: Option<i32>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct MarketPosition {
     pub ticker: String,
-    /// The total traded amount in the market.
     pub total_traded: i64,
-    /// The total traded amount in the market in dollars (fixed-point string).
     pub total_traded_dollars: Option<String>,
-    /// Last time the position is updated.
+    pub position: i32,
+    pub position_fp: Option<String>,
+    pub market_exposure: i64,
+    pub market_exposure_dollars: Option<String>,
+    pub realized_pnl: i64,
+    pub realized_pnl_dollars: Option<String>,
+    pub resting_orders_count: i32,
+    pub fees_paid: i64,
+    pub fees_paid_dollars: Option<String>,
     pub last_updated_ts: Option<String>,
 }
 
-/// Represents the necessary fields for creating an order in the Kalshi exchange.
-///
-/// This struct is used to encapsulate all the data needed to create a new order. It includes details about the order type,
-/// the action being taken (buy/sell), the market ticker, and various other optional parameters that can be specified
-/// to fine-tune the order according to the user's needs.
-#[derive(Debug, Deserialize, Serialize)]
-pub struct OrderCreationField {
-    /// The action (buy/sell) of the order.
-    pub action: Action,
-    /// Client-side identifier for the order. Optional.
-    pub client_order_id: Option<String>,
-    /// The number of contracts or shares involved in the order.
-    pub count: i32,
-    /// The side (Yes/No) of the order.
-    pub side: Side,
-    /// Ticker of the market associated with the order.
-    pub ticker: String,
-    /// Type of the order (e.g., market, limit).
-    pub input_type: OrderType,
-    /// The maximum cost the buyer is willing to incur for a 'buy' action. Optional.
-    pub buy_max_cost: Option<i64>,
-    /// Expiration time of the order. Optional.
-    pub expiration_ts: Option<i64>,
-    /// Price of the 'No' option in the order. Optional.
-    pub no_price: Option<i64>,
-    /// Price of the 'Yes' option in the order. Optional.
-    pub yes_price: Option<i64>,
-    /// Time-in-force policy for the order. Optional.
-    pub time_in_force: Option<TimeInForce>,
-}
-
-impl OrderParams for OrderCreationField {
-    fn get_params(
-        self,
-    ) -> (
-        Action,
-        Option<String>,
-        i32,
-        Side,
-        String,
-        OrderType,
-        Option<i64>,
-        Option<i64>,
-        Option<i64>,
-        Option<i64>,
-        Option<TimeInForce>,
-    ) {
-        (
-            self.action,
-            self.client_order_id,
-            self.count,
-            self.side,
-            self.ticker,
-            self.input_type,
-            self.buy_max_cost,
-            self.expiration_ts,
-            self.no_price,
-            self.yes_price,
-            self.time_in_force,
-        )
-    }
-}
-
-/// The side of a market position in the Kalshi exchange.
-///
-/// This enum is used to indicate whether a market position, order, or trade is associated with the 'Yes' or 'No' outcome of a market event.
-///
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum Side {
-    /// Represents a position, order, or trade associated with the 'Yes' outcome of a market event.
     Yes,
-    /// Represents a position, order, or trade associated with the 'No' outcome of a market event.
     No,
 }
 
-/// This enum is used to specify the type of action a user wants to take in an order, either buying or selling.
-///
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum Action {
-    /// Represents a buy action.
     Buy,
-    /// Represents a sell action.
     Sell,
 }
 
@@ -962,123 +491,124 @@ impl fmt::Display for Action {
     }
 }
 
-/// The status of an order in the Kalshi exchange.
-///
-/// This enum categorizes an order's lifecycle state, from creation to completion or cancellation.
-///
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
 pub enum OrderStatus {
-    /// The order is active but not yet filled or partially filled and still in the order book.
     Resting,
-    /// The order has been canceled and is no longer active.
     Canceled,
-    /// The order has been fully executed.
     Executed,
-    /// The order has been created and is awaiting further processing.
     Pending,
 }
 
 impl fmt::Display for OrderStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            OrderStatus::Resting => write!(f, "resting"),
-            OrderStatus::Canceled => write!(f, "cancelled"),
-            OrderStatus::Executed => write!(f, "executed"),
-            OrderStatus::Pending => write!(f, "pending"),
-        }
+        let s = match self {
+            OrderStatus::Resting => "resting",
+            OrderStatus::Canceled => "canceled",
+            OrderStatus::Executed => "executed",
+            OrderStatus::Pending => "pending",
+        };
+        write!(f, "{}", s)
     }
 }
 
-/// Defines the type of an order in the Kalshi exchange.
-///
-/// This enum is used to specify the nature of the order, particularly how it interacts with the market.
-///
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum OrderType {
-    /// A market order is executed immediately at the current market price.
-    Market,
-    /// A limit order is set to be executed at a specific price or better.
-    Limit,
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct OrderGroup {
+    pub id: String,
+    pub contracts_limit: i64,
+    pub contracts_limit_fp: String,
+    pub is_auto_cancel_enabled: bool,
 }
 
-/// Defines the time-in-force policy for an order in the Kalshi exchange.
-///
-/// This enum specifies how long an order remains active before it is executed or expires.
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum TimeInForce {
-    /// An order that must be executed immediately and completely or it is canceled.
-    FillOrKill,
-    /// An order that must be executed immediately, and any portion not filled is canceled.
-    ImmediateOrCancel,
+#[derive(Debug, Deserialize)]
+struct GetOrderGroupsResponse {
+    pub order_groups: Vec<OrderGroup>,
 }
 
-trait OrderParams {
-    fn get_params(
-        self,
-    ) -> (
-        Action,
-        Option<String>,
-        i32,
-        Side,
-        String,
-        OrderType,
-        Option<i64>,
-        Option<i64>,
-        Option<i64>,
-        Option<i64>,
-        Option<TimeInForce>,
-    );
+#[derive(Debug, Deserialize)]
+pub struct GetOrderGroupResponse {
+    pub is_auto_cancel_enabled: bool,
+    pub contracts_limit: i64,
+    pub contracts_limit_fp: String,
+    pub orders: Vec<String>,
 }
 
-impl OrderParams
-    for (
-        Action,
-        Option<String>,
-        i32,
-        Side,
-        String,
-        OrderType,
-        Option<i64>,
-        Option<i64>,
-        Option<i64>,
-        Option<i64>,
-        Option<TimeInForce>,
-    )
-{
-    fn get_params(
-        self,
-    ) -> (
-        Action,
-        Option<String>,
-        i32,
-        Side,
-        String,
-        OrderType,
-        Option<i64>,
-        Option<i64>,
-        Option<i64>,
-        Option<i64>,
-        Option<TimeInForce>,
-    ) {
-        (
-            self.0, self.1, self.2, self.3, self.4, self.5, self.6, self.7, self.8, self.9, self.10,
-        )
-    }
+#[derive(Debug, Serialize)]
+pub struct CreateOrderGroupRequest {
+    pub contracts_limit: Option<i64>,
+    pub contracts_limit_fp: Option<String>,
+    pub subaccount: Option<u32>,
 }
 
-#[cfg(test)]
-mod test {
-    use crate::portfolio::MultipleOrderResponse;
+#[derive(Debug, Serialize)]
+pub struct UpdateOrderGroupLimitRequest {
+    pub contracts_limit: Option<i64>,
+    pub contracts_limit_fp: Option<String>,
+}
 
-    #[test]
-    fn test_serialize_multiple_order_response() -> serde_json::Result<()> {
-        let json = r#"{"orders":[],"cursor":""}"#;
-        let result = serde_json::from_str::<MultipleOrderResponse>(json)?;
-        assert!(result.orders.is_empty());
-        assert!(result.cursor.is_none());
-        Ok(())
-    }
+#[derive(Debug, Deserialize)]
+struct CreateOrderGroupResponse {
+    pub order_group_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CreateSubaccountResponse {
+    pub subaccount_number: u32,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ApplySubaccountTransferRequest {
+    pub client_transfer_id: String,
+    pub from_subaccount: u32,
+    pub to_subaccount: u32,
+    pub amount_cents: i64,
+}
+
+#[derive(Debug, Deserialize)]
+struct GetSubaccountBalancesResponse {
+    pub subaccount_balances: Vec<SubaccountBalance>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct SubaccountBalance {
+    pub subaccount_number: u32,
+    pub balance: String,
+    pub updated_ts: i64,
+}
+
+#[derive(Debug, Deserialize)]
+struct GetSubaccountTransfersResponse {
+    pub transfers: Vec<SubaccountTransfer>,
+    pub cursor: Option<String>,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct SubaccountTransfer {
+    pub transfer_id: String,
+    pub from_subaccount: u32,
+    pub to_subaccount: u32,
+    pub amount_cents: i64,
+    pub created_ts: i64,
+}
+
+#[derive(Debug, Serialize)]
+pub struct UpdateSubaccountNettingRequest {
+    pub subaccount_number: u32,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct GetSubaccountNettingResponse {
+    pub netting_configs: Vec<SubaccountNettingConfig>,
+}
+
+#[derive(Debug, Deserialize)]
+struct GetPortfolioRestingOrderTotalValueResponse {
+    pub total_resting_order_value: i64,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct SubaccountNettingConfig {
+    pub subaccount_number: u32,
+    pub enabled: bool,
 }
