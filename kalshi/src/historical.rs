@@ -150,6 +150,7 @@ impl Kalshi {
 
 #[derive(Debug, Deserialize)]
 struct GetMarketCandlesticksHistoricalResponse {
+    #[allow(dead_code)]
     pub ticker: String,
     pub candlesticks: Vec<MarketCandlestickHistorical>,
 }

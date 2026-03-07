@@ -78,12 +78,6 @@ impl<'a> KalshiWebsocketClient {
         let mut req = Uri::from_str(kalshi.get_ws_url())?.into_client_request()?;
         let mut headers = req.headers_mut();
         match &mut kalshi.auth {
-            KalshiAuth::EmailPassword => {
-                let curr_token = kalshi
-                    .get_user_token()
-                    .ok_or("No user token, login first using .login(..)".to_string())?;
-                headers.insert("Authorization", HeaderValue::from_str(&curr_token)?);
-            }
             KalshiAuth::ApiKey { key_id, signer, .. } => {
                 let api_key_headers =
                     api_key_headers(key_id, signer, "/trade-api/ws/v2", Method::GET)?;
@@ -119,10 +113,6 @@ impl<'a> KalshiWebsocketClient {
     /// Subscribe to one or more channels using the provided parameters.
     /// 
     /// If subscribing to `OrderbookDelta`, a market specification (ticker or tickers) is required.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `Result<u32, Box<dyn Error>>` where the unsigned integer is the command id.
     pub async fn subscribe(
         &mut self,
         params: KalshiSubscribeCommandParams,
@@ -144,13 +134,6 @@ impl<'a> KalshiWebsocketClient {
     }
 
     /// Unsubscribe one or more existing subscriptions
-    ///
-    /// # Returns
-    ///
-    /// Returns a `Result<u32, Box<dyn Error>>` where the unsigned integer is the command id
-    ///
-    /// ```
-    ///
     pub async fn unsubscribe(&mut self, sids: Vec<u32>) -> Result<u32, Box<dyn Error>> {
         let cmd_id = self.next_cmd_id;
         let msg = KalshiCommand::Unsubscribe {
@@ -163,10 +146,6 @@ impl<'a> KalshiWebsocketClient {
     }
 
     /// Add or delete markets on an existing subscription using the provided parameters.
-    ///
-    /// # Returns
-    ///
-    /// Returns a `Result<u32, Box<dyn Error>>` where the unsigned integer is the command id
     pub async fn update_subscription(
         &mut self,
         params: KalshiUpdateSubscriptionCommandParams,
@@ -191,22 +170,11 @@ impl<'a> KalshiWebsocketClient {
     }
 
     /// Get a broadcast receiver from the websocket stream
-    /// You probably want to use `.stream()`
-    ///
-    /// # Returns
-    ///
-    /// Returns a broadcast::Receiver<KalshiWebsocketResponse>
-    ///
-    /// ```
-    ///
     pub fn receiver(&self) -> Receiver<Result<KalshiWebsocketResponse, KalshiWebsocketError>> {
         self.from_kalshi.resubscribe()
     }
 
     /// Gracefully closes the websocket connection consuming the client
-    ///
-    /// ```
-    ///
     fn close(self) -> Result<(), Box<dyn Error>> {
         self.to_kalshi.send(KalshiCommand::End)?;
         Ok(())
@@ -254,16 +222,14 @@ async fn kalshi_ws_handler(
                         match msg {
                             Message::Text(text) => {
                                 match serde_json::from_str::<KalshiWebsocketResponse>(&text) {
-                                    Ok(res) => from_kalshi_tx.send(Ok(res)),
-                                    Err(e) => from_kalshi_tx.send(Err(KalshiWebsocketError::SerializationError(e.to_string()))),
+                                    Ok(res) => { from_kalshi_tx.send(Ok(res)); },
+                                    Err(e) => { from_kalshi_tx.send(Err(KalshiWebsocketError::SerializationError(e.to_string()))); },
                                 };
                             },
                             Message::Close(_) => {
                                 from_kalshi_tx.send(Err(KalshiWebsocketError::ConnectionClosed));
                                 break 'out;
                             }
-                            // Pings should be automatically handled by tokio_tungstenite
-                            // All other messages are unhandled
                             _ => {}
                         }
                     },

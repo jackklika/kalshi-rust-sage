@@ -17,7 +17,7 @@ use super::Kalshi;
 
 impl Kalshi {
     fn auth_headers(&self, path: &str, method: Method) -> HeaderMap {
-        let mut headers = HeaderMap::new(); // Initialize HeaderMap here
+        let mut headers = HeaderMap::new();
         match &self.auth {
             KalshiAuth::ApiKey { key_id, key, .. } => {
                 let pkey = PKey::private_key_from_pem(key.as_bytes()).unwrap();
@@ -35,20 +35,8 @@ impl Kalshi {
                     );
                 }
             }
-            KalshiAuth::EmailPassword => {
-                headers.insert(
-                    HeaderName::from_static("Authorization"),
-                    HeaderValue::from_str(
-                        &self
-                            .curr_token
-                            .clone()
-                            .expect("Token not found with EmailPassword auth"),
-                    )
-                    .unwrap(),
-                );
-            }
         }
-        headers // Return the HeaderMap
+        headers
     }
 
     pub async fn http_get<T: DeserializeOwned>(&self, url: Url) -> Result<T, KalshiError> {
@@ -61,6 +49,7 @@ impl Kalshi {
 
         self.process_response::<T>("GET", &url, None, resp).await
     }
+
     pub async fn http_post<B, T>(&self, url: Url, body: &B) -> Result<T, KalshiError>
     where
         B: Serialize + ?Sized,
@@ -79,6 +68,7 @@ impl Kalshi {
         self.process_response::<T>("POST", &url, Some(req_body_string), resp)
             .await
     }
+
     pub async fn http_put<B, T>(&self, url: Url, body: &B) -> Result<T, KalshiError>
     where
         B: Serialize + ?Sized,
@@ -97,6 +87,7 @@ impl Kalshi {
         self.process_response::<T>("PUT", &url, Some(req_body_string), resp)
             .await
     }
+
     pub async fn http_delete<T: DeserializeOwned>(&self, url: Url) -> Result<T, KalshiError> {
         let resp = self
             .client
@@ -241,6 +232,7 @@ impl Kalshi {
             KalshiError::RequestError(RequestError::UrlParseError(err))
         })
     }
+
     pub fn build_url(&self, base_path: &str) -> Result<Url, KalshiError> {
         let base_url_str = format!("{}{}", self.base_url, base_path);
         Url::parse(&base_url_str).map_err(|err| {

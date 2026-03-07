@@ -352,6 +352,7 @@ struct BatchCancelOrdersResponse {
 
 #[derive(Debug, Deserialize)]
 struct BatchCancelOrdersIndividualResponse {
+    #[allow(dead_code)]
     pub order_id: String,
     pub order: Option<Order>,
     pub reduced_by: i32,

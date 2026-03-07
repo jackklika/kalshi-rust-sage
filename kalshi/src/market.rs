@@ -156,6 +156,7 @@ struct OrderBookResponse {
 
 #[derive(Debug, Deserialize)]
 struct MarketHistoryResponse {
+    #[allow(dead_code)]
     pub cursor: Option<String>,
     pub ticker: String,
     pub history: Vec<Snapshot>,
